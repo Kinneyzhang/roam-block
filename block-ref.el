@@ -74,7 +74,10 @@ at the beginning of file, usually are some meta settings.")
   "The origin content of block in edited block buffer.")
 
 (defvar-local block-ref-edit-block-file nil
-  "The file path that the edited block belongs to.")
+  "The file that the uuid link belongs to.")
+
+(defvar-local block-ref-edit-block-origin-file nil
+  "Origin file of the edited uuid block.")
 
 ;;;; Functions
 
@@ -230,6 +233,7 @@ Return a list of uuid used for deleting redundant block records."
     (message "Successfully jump to block")))
 
 (defun block-ref-link-fontify (beg end)
+  "Highlight block-ref link between BEG and END."
   (when (block-ref-work-on)
     (save-excursion
       (goto-char beg)
@@ -248,6 +252,17 @@ Return a list of uuid used for deleting redundant block records."
             (with-silent-modifications
               (remove-text-properties beg end '(display nil)))))))))
 
+(defun block-ref--fontify-link ()
+  "Highlight block-ref link in all current frame's windows."
+  (let ((wins (window-list)))
+    (save-selected-window
+      (dolist (win wins)
+        (select-window win)
+        (when (block-ref-work-on)
+          (block-ref-link-fontify (point-min) (point-max)))))))
+
+;; Edit block
+
 (define-minor-mode block-ref-edit-mode
   "Minor mode for editing a refered read only block."
   :lighter ""
@@ -265,28 +280,32 @@ to finish, `\\[block-ref--edit-abort]' to abort."))
   (setq truncate-lines nil))
 
 (defun block-ref--edit-abort ()
+  "Abort editing the read only block content."
   (interactive)
   (switch-to-buffer (get-file-buffer block-ref-edit-block-file))
   (kill-buffer block-ref-edit-buf))
 
 (defun block-ref--edit-finalize ()
+  "Finish editing the read only block content."
   (interactive)
   (let ((file block-ref-edit-block-file)
+        (origin-file block-ref-edit-block-origin-file)
         (uuid block-ref-edit-block-uuid)
         (origin-content block-ref-edit-block-content)
         (content (buffer-string)))
+    (with-current-buffer (find-file-noselect origin-file)
+      (save-excursion
+        (goto-char (point-min))
+        (while (search-forward origin-content nil t)
+          (when (string= uuid (get-char-property
+                               (line-beginning-position) 'uuid))
+            (let ((beg (match-beginning 0))
+                  (end (match-end 0)))
+              (insert content)
+              (delete-region beg end)
+              (save-buffer))))))
     (switch-to-buffer (get-file-buffer file))
-    (kill-buffer block-ref-edit-buf)
-    (save-excursion
-      (goto-char (point-min))
-      (while (search-forward origin-content nil t)
-        (when (string= uuid (get-char-property
-                             (line-beginning-position) 'uuid))
-          (let ((beg (match-beginning 0))
-                (end (match-end 0)))
-            (insert content)
-            (delete-region beg end)
-            (save-buffer)))))))
+    (kill-buffer block-ref-edit-buf)))
 
 (defun block-ref--get-block-uuid ()
   "Get the uuid from block according to different postions of cursor."
@@ -301,7 +320,7 @@ to finish, `\\[block-ref--edit-abort]' to abort."))
     (match-string-no-properties 1))))
 
 ;;;###autoload
-(defun block-ref-copy-ref ()
+(defun block-ref-copy-link ()
   "Save the block-ref link to kill-ring, use the block at point by default.
 If a region is active, copy all blocks' ref links that the region contains."
   (interactive)
@@ -327,6 +346,9 @@ If a region is active, copy all blocks' ref links that the region contains."
   (interactive)
   (let* ((file (buffer-file-name))
          (uuid (block-ref--get-block-uuid))
+         (origin-file
+          (caar (block-ref-db-query
+                 `[:select file :from blocks :where (= uuid ,uuid)])))
          (content (block-ref-db--block-content uuid))
          (mode major-mode))
     (if uuid
@@ -334,6 +356,7 @@ If a region is active, copy all blocks' ref links that the region contains."
           (insert content)
           (setq major-mode mode)
           (setq block-ref-edit-block-file file)
+          (setq block-ref-edit-block-origin-file origin-file)
           (setq block-ref-edit-block-uuid uuid)
           (setq block-ref-edit-block-content content)
           (block-ref-edit-mode)
@@ -360,7 +383,7 @@ file and cache them database."
   "Block-ref function binded to `after-save-hook'.
 Update caches of those changed blocks and fontify block ref links."
   (block-ref-db-cache-file)
-  (block-ref-link-fontify (point-min) (point-max)))
+  (block-ref--fontify-link))
 
 ;; Minor mode
 
