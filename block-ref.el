@@ -221,16 +221,27 @@ Return a list of uuid used for deleting redundant block records."
 
 ;; Block-ref link
 
+(defvar block-ref-buf "*Block Ref*"
+  "Name of block references buffer.")
+
 (define-button-type 'block-ref-link
   'action #'block-ref-follow-link
   'face nil
-  'follow-link t
+  'content nil
+  'follow-link nil
   'help-echo "Jump to this block.")
 
 (defun block-ref-follow-link (btn)
   "Jump to block references buffer after follow block-ref link."
   (with-demoted-errors "Error when following the link: %s"
-    (message "Successfully jump to block")))
+    (let ((content (button-get btn 'content)))
+      (with-current-buffer (get-buffer-create block-ref-buf)
+        ;; Should set the buffer mode to the
+        ;; origin uuid block file's major mode.
+        (erase-buffer)
+        (insert (propertize content 'face '(:height 1.2)))
+        (setq-local header-line-format "View Buffer: Press 'q' to quit."))
+      (view-buffer block-ref-buf))))
 
 (defun block-ref-link-fontify (beg end)
   "Highlight block-ref link between BEG and END."
@@ -246,14 +257,17 @@ Return a list of uuid used for deleting redundant block records."
                                          :where (= uuid ,uuid)]))))
           (if content
               (with-silent-modifications
-                ;;; dislpay a propertized content!!!!!!!!!!!!!
                 (add-text-properties beg end `(display ,content read-only t))
-                (make-text-button beg end :type 'block-ref-link))
+                (make-text-button beg end :type 'block-ref-link
+                                  'content content))
             (with-silent-modifications
-              (remove-text-properties beg end '(display nil)))))))))
+              (remove-text-properties beg end '(display nil read-only nil)))))))))
 
-(defun block-ref--fontify-link ()
+(defun block-ref-fontify-link ()
   "Highlight block-ref link in all current frame's windows."
+  ;; fontify current buffer
+  (block-ref-link-fontify (point-min) (point-max))
+  ;; fontify all displayed windows
   (let ((wins (window-list)))
     (save-selected-window
       (dolist (win wins)
@@ -292,19 +306,23 @@ to finish, `\\[block-ref--edit-abort]' to abort."))
         (origin-file block-ref-edit-block-origin-file)
         (uuid block-ref-edit-block-uuid)
         (origin-content block-ref-edit-block-content)
-        (content (buffer-string)))
+        (content (buffer-substring-no-properties (point-min) (point-max))))
     (with-current-buffer (find-file-noselect origin-file)
       (save-excursion
         (goto-char (point-min))
-        (while (search-forward origin-content nil t)
-          (when (string= uuid (get-char-property
-                               (line-beginning-position) 'uuid))
-            (let ((beg (match-beginning 0))
-                  (end (match-end 0)))
-              (insert content)
-              (delete-region beg end)
-              (save-buffer))))))
+        ;; have bugs!
+        (catch 'break
+          (while (search-forward origin-content nil t)
+            (when (string= uuid (get-char-property
+                                 (line-beginning-position) 'uuid))
+              (replace-match content)
+              (save-buffer)
+              (throw 'break nil))))))
     (switch-to-buffer (get-file-buffer file))
+    (save-excursion
+      (goto-char (point-min))
+      (search-forward (format "((%s))" uuid) nil t)
+      (block-ref-link-fontify (match-beginning 0) (match-end 0)))
     (kill-buffer block-ref-edit-buf)))
 
 (defun block-ref--get-block-uuid ()
@@ -374,16 +392,21 @@ If a region is active, copy all blocks' ref links that the region contains."
 If there exists caches of the file, restore overlays of the file buffer.
 If there doesn't exist caches of the file, put overlays for each block in
 file and cache them database."
-  (unless (block-ref-restore-overlays)
-    (block-ref-db-cache-file))
-  (block-ref-link-fontify (point-min) (point-max))
-  (block-ref--buffer-setting))
+  (when (block-ref-work-on)
+    (unless (block-ref-restore-overlays)
+      (block-ref-db-cache-file))
+    (block-ref-link-fontify (point-min) (point-max))
+    (block-ref--buffer-setting)))
 
 (defun block-ref--after-save-hook-function ()
   "Block-ref function binded to `after-save-hook'.
 Update caches of those changed blocks and fontify block ref links."
-  (block-ref-db-cache-file)
-  (block-ref--fontify-link))
+  ;; FIXME: Cannot work properly in markdown-mode.
+  ;; After the md buffer is saved, the display attribute
+  ;; of text properties will lost.
+  (when (block-ref-work-on)
+    (block-ref-db-cache-file)
+    (block-ref-fontify-link)))
 
 ;; Minor mode
 
@@ -401,21 +424,19 @@ Update caches of those changed blocks and fontify block ref links."
                     (executable-find "sqlite3"))
           (lwarn '(block-ref) :error "Cannot find executable 'sqlite3'. \
 Please make sure it is installed and can be found within `exec-path'."))
+        (jit-lock-register #'block-ref-link-fontify)
         (add-hook 'find-file-hook #'block-ref--find-file-hook-function)
-        (add-hook 'after-save-hook #'block-ref--after-save-hook-function)
-        (jit-lock-register #'block-ref-link-fontify))
+        (add-hook 'after-save-hook #'block-ref--after-save-hook-function))
+    (jit-lock-unregister #'block-ref-link-fontify)
     (remove-hook 'find-file-hook #'block-ref--find-file-hook-function)
     (remove-hook 'after-save-hook #'block-ref--after-save-hook-function)
-    (jit-lock-unregister #'block-ref-link-fontify)
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward block-ref-link-re nil t)
         (with-silent-modifications
           (let ((inhibit-read-only t))
-            (remove-text-properties (match-beginning 0)
-                                    (match-end 0) '(display nil))
-            (remove-text-properties (match-beginning 0)
-                                    (match-end 0) '(read-only nil)))))))
+            (remove-text-properties (match-beginning 0) (match-end 0)
+                                    '(display nil read-only nil)))))))
   (jit-lock-refontify))
 
 (provide 'block-ref)
