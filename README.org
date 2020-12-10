@@ -1,40 +1,41 @@
-#+TITLE: Block-ref
+#+TITLE: Roam Block
 
 * Introduction
-Block-ref is used to implement versatile block references and block embed between different types of files. It means, you can insert block references in files without caring about the filename extentions due to the technique of implement.
+Roam-block is an all-purpose block references and block embed implement in emacs.
 
 * Installation
 
 Firstly, install the dependencies: [[https://github.com/skeeto/emacsql][emacsql]] and [[https://github.com/cireu/emacsql-sqlite3][emacsql-sqlite3]].
 
-Then, clone block-ref repo to your local directory and add the following codes to your emacs configuration:
+Then, clone roam-block repo to your local directory and add the following codes to your emacs configuration:
 
 #+BEGIN_SRC emacs-lisp
-(add-to-list 'load-path "/path/to/block-ref")
-(require 'block-ref)
-(setq block-ref-directory "~/block-ref/")
-(define-key block-ref-mode-map (kbd "C-c b c") #'block-ref-copy-ref)
-(define-key block-ref-mode-map (kbd "C-c b e") #'block-ref-edit-block)
-(block-ref-mode 1)
+(add-to-list 'load-path "path/to/roam-block/")
+(require 'roam-block)
+(setq 'roam-block-home '("~/roam-block/"))
+(roam-block-mode 1)
+(define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-copy-ref)
+(define-key roam-block-mode-map (kbd "C-c b e") #'roam-block-edit-block)
 #+END_SRC
 
 If you prefer 'use-package', use the following codes:
 
 #+BEGIN_SRC emacs-lisp
-(use-package block-ref
-  :load-path "/path/to/block-ref"
-  :init (setq block-ref-directory "~/block-ref/")
-  :bind (:map block-ref-mode-map
-              (("C-c b c" . block-ref-copy-ref)
-               ("C-c b e" . block-ref-edit-block)))
-  :config (block-ref-mode 1))
+(use-package roam-block
+  :load-path "path/to/roam-block/"
+  :hook (after-init . roam-block-mode)
+  :init (setq roam-block-home '("~/roam-block/"))
+  :bind
+  (:map roam-block-mode-map
+        (("C-c b c" . roam-block-copy-link)
+         ("C-c b e" . roam-block-edit-block))))
 #+END_SRC
 
 * Usage
  
- Use command =block-ref-copy-ref= to copy the ref link of current block or blocks in an active region, then press <kbd>C-y<kbd> to paste the block-ref link at where you want to refer the blocks.
+ Use command =roam-block-copy-ref= to copy the ref of current block or blocks in an active region, then press =C-y= to paste the ref at where you want to refer the blocks.
 
- The block references is read only by default. Use =block-ref-edit-block= to edit it in block-ref-edit buffer.
+ The block references is read only by default. Use =roam-block-edit-block= to edit it in roam-block-edit buffer.
 
 * License
   Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].
