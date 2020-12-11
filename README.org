@@ -1,11 +1,19 @@
-#+TITLE: Roam Block
+* Table of Contents :TOC_3:
+  - [[#introduction][Introduction]]
+  - [[#installation][Installation]]
+  - [[#usage][Usage]]
+  - [[#license][License]]
 
 ** Introduction
  Roam-block is an all-purpose block references and block embed implement in emacs.
 
 ** Installation
 
- Firstly, install the dependencies: [[https://github.com/skeeto/emacsql][emacsql]] and [[https://github.com/cireu/emacsql-sqlite3][emacsql-sqlite3]].
+ Firstly, install the dependencies:
+
+ - [[https://www.sqlite.org/index.html][sqlite3]] cli
+ - [[https://github.com/skeeto/emacsql][emacsql]] package
+ - [[https://github.com/cireu/emacsql-sqlite3][emacsql-sqlite3]] package
 
  Then, clone roam-block repo to your local directory and add the following codes to your emacs configuration:
 
@@ -14,8 +22,8 @@
  (require 'roam-block)
  (setq 'roam-block-home '("~/roam-block/"))
  (roam-block-mode 1)
- (define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-copy-ref)
- (define-key roam-block-mode-map (kbd "C-c b e") #'roam-block-edit-block)
+ (define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-ref-copy)
+ (define-key roam-block-mode-map (kbd "C-c b e") #'roam-block-ref-edit)
  #+END_SRC
 
  If you prefer 'use-package', use the following codes:
@@ -27,15 +35,17 @@
    :init (setq roam-block-home '("~/roam-block/"))
    :bind
    (:map roam-block-mode-map
-         (("C-c b c" . roam-block-copy-link)
-          ("C-c b e" . roam-block-edit-block))))
+         (("C-c b c" . roam-block-ref-copy)
+          ("C-c b e" . roam-block-ref-edit))))
  #+END_SRC
 
 ** Usage
  
-  Use command =roam-block-copy-ref= to copy the ref of current block or blocks in an active region, then press =C-y= to paste the ref at where you want to refer the blocks.
+   =roam-block-ref-copy=\\
+   Copy the ref of current block or blocks in an active region, then press =C-y= to paste the ref at where you want to refer the blocks.
 
-  The block references is read only by default. Use =roam-block-edit-block= to edit it in roam-block-edit buffer.
+   =roam-block-ref-edit=\\
+   By default, the block ref is read only. Use this command to edit the displayed content in an edit buffer.
 
 ** License
    Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].

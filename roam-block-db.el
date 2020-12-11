@@ -180,10 +180,9 @@ with UUID-LST list."
          (redundant-uuid-lst (seq-filter (lambda (item)
                                            (not (member item uuid-lst)))
                                          cached-uuid-lst)))
-    ;; (message "redundant: %S" (redundant-uuid-lst))
     (when redundant-uuid-lst
       (dolist (uuid redundant-uuid-lst)
-        ;; delete overlay and pop in `roam-block-ovs'.!!!!!!!!!!!!!!!!!!!!
+        ;; FIXME: Delete overlay in `roam-block-ovs'.
         (roam-block-db-query `[:delete :from blocks
                                        :where (= uuid ,uuid)])))))
 

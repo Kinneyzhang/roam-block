@@ -115,25 +115,25 @@
   "Minor mode for editing a refered read only block."
   :lighter ""
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-c C-k") #'roam-block--edit-abort)
-            (define-key map (kbd "C-c C-c") #'roam-block--edit-finalize)
+            (define-key map (kbd "C-c C-k") #'roam-block-ref--edit-abort)
+            (define-key map (kbd "C-c C-c") #'roam-block-ref--edit-finalize)
             map)
   :require 'roam-block
   (if roam-block-ref-edit-mode
       (setq-local header-line-format
                   (substitute-command-keys
-                   "\\<roam-block-ref-edit-mode-map>Edit block: `\\[roam-block--edit-finalize]' \
-to finish, `\\[roam-block--edit-abort]' to abort."))
+                   "\\<roam-block-ref-edit-mode-map>Edit block: `\\[roam-block-ref--edit-finalize]' \
+to finish, `\\[roam-block-ref--edit-abort]' to abort."))
     (setq-local header-line-format nil))
   (setq truncate-lines nil))
 
-(defun roam-block--edit-abort ()
+(defun roam-block-ref--edit-abort ()
   "Abort editing the read only block content."
   (interactive)
   (switch-to-buffer (get-file-buffer roam-block-ref-in-file))
   (kill-buffer roam-block-ref-edit-buf))
 
-(defun roam-block--edit-finalize ()
+(defun roam-block-ref--edit-finalize ()
   "Finish editing the read only block content."
   (interactive)
   (let ((file roam-block-ref-in-file)
@@ -160,8 +160,8 @@ to finish, `\\[roam-block--edit-abort]' to abort."))
     (kill-buffer roam-block-ref-edit-buf)))
 
 ;;;###autoload
-(defun roam-block-copy-link ()
-  "Save the roam-block link to kill-ring, use the block at point by default.
+(defun roam-block-ref-copy ()
+  "Save the roam-block ref to kill-ring, use the block at point by default.
 If a region is active, copy all blocks' ref links that the region contains."
   (interactive)
   (cond
@@ -179,11 +179,11 @@ If a region is active, copy all blocks' ref links that the region contains."
    (t (save-excursion
         (goto-char (line-beginning-position))
         (kill-new (format "((%s))" (get-char-property (point) 'uuid))))))
-  (message "Have copyed the block refs."))
+  (message "(roam-block) Copyed the block refs."))
 
 ;;;###autoload
-(defun roam-block-edit-block ()
-  "Edit the content of the read only block."
+(defun roam-block-ref-edit ()
+  "Edit the content of the ref block."
   (interactive)
   (let* ((file (buffer-file-name))
          (uuid (roam-block--ref-uuid))
@@ -200,7 +200,7 @@ If a region is active, copy all blocks' ref links that the region contains."
           (setq roam-block-ref-content content)
           (roam-block-ref-edit-mode)
           (switch-to-buffer roam-block-ref-edit-buf))
-      (message "No block needs to be edited!"))))
+      (message "(roam-block) No block ref here!"))))
 
 (provide 'roam-block-ref)
 ;;; roam-block-ref.el ends here
