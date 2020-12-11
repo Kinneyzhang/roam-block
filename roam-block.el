@@ -35,6 +35,8 @@
 (require 'subr-x)
 
 (require 'roam-block-db)
+(require 'roam-block-ref)
+;; (require 'roam-block-embed)
 
 ;;;; Variables
 
@@ -57,9 +59,6 @@ In Windows, the directory separator character is '\\'."
   "Regular expression that matches contents needed to be skipped
 at the beginning of file, usually are some meta settings.")
 
-(defvar roam-block-link-re "((\\([a-z0-9]\\{32\\}\\)))"
-  "Regular expression that matches a `roam-block-link'.")
-
 (defvar-local roam-block-ovs nil
   "List of block overlays for each local buffer.")
 
@@ -67,24 +66,6 @@ at the beginning of file, usually are some meta settings.")
   "The line number of a block.")
 
 (defvar roam-block-block-re "^.+$")
-
-(defvar roam-block-linked-buf "*Roam Block Linked*"
-  "Name of linked references buffer.")
-
-(defvar roam-block-edit-buf "*Roam Block Edit*"
-  "Name of buffer for editing blocks.")
-
-(defvar-local roam-block-edit-block-uuid nil
-  "The uuid of block in edited block buffer.")
-
-(defvar-local roam-block-edit-block-content nil
-  "The origin content of block in edited block buffer.")
-
-(defvar-local roam-block-edit-block-file nil
-  "The file that the uuid link belongs to.")
-
-(defvar-local roam-block-edit-block-origin-file nil
-  "Origin file of the edited uuid block.")
 
 ;;;; Functions
 
@@ -106,9 +87,10 @@ otherwise call function before change. ARGS are the rest arguments."
     (when (= roam-block-linum (line-number-at-pos))
       (move-overlay ov (line-beginning-position) (line-end-position)))))
 
-(defun roam-block-overlay-block (beg end &optional uuid)
+(defun roam-block-overlay-block (beg end &optional uuid prop value)
   "Put overlays between BEG and END. If UUID is non-nil, 
-use it as the value of uuid overlay."
+use it as the value of uuid overlay.  
+If PROP and VALUE is non-nil, also put the overlay on this block."
   (let ((uuid (or uuid (roam-block--get-uuid)))
         (ov (make-overlay beg end)))
     (push ov roam-block-ovs)
@@ -116,6 +98,8 @@ use it as the value of uuid overlay."
     (overlay-put ov 'evaporate t)
     (overlay-put ov 'insert-behind-hooks '(roam-block-insert-behind))
     (overlay-put ov 'insert-in-front-hooks '(roam-block-insert-in-front))
+    (when (and prop value)
+      (overlay-put ov prop value))
     uuid))
 
 (defun roam-block-restore-overlays ()
@@ -174,166 +158,6 @@ Return a list of uuid used for deleting redundant block records."
                 (throw 'break uuid-lst))))
           uuid-lst)))))
 
-;; roam-block link
-
-(define-button-type 'roam-block-link
-  'action #'roam-block-follow-link
-  'face nil
-  'content nil
-  'follow-link nil
-  'help-echo "Jump to this block.")
-
-(defun roam-block-follow-link (btn)
-  "Jump to block references buffer after follow roam-block link."
-  (with-demoted-errors "Error when following the link: %s"
-    (let ((content (button-get btn 'content)))
-      (with-current-buffer (get-buffer-create roam-block-linked-buf)
-        ;; Should set the buffer mode to the
-        ;; origin uuid block file's major mode.
-        (erase-buffer)
-        (insert (propertize content 'face '(:height 1.2)))
-        (setq-local header-line-format "View Buffer: Press 'q' to quit."))
-      (view-buffer roam-block-linked-buf))))
-
-(defun roam-block-link-fontify (beg end)
-  "Highlight roam-block link between BEG and END."
-  (when (roam-block-work-on)
-    (save-excursion
-      (goto-char beg)
-      (while (re-search-forward roam-block-link-re end t)
-        (let* ((uuid (match-string-no-properties 1))
-               (beg (match-beginning 0))
-               (end (match-end 0))
-               (content (caar (roam-block-db-query
-                               `[:select content :from blocks
-                                         :where (= uuid ,uuid)]))))
-          (if content
-              (with-silent-modifications
-                (add-text-properties beg end `(display ,content read-only t))
-                (make-text-button beg end :type 'roam-block-link
-                                  'content content))
-            (with-silent-modifications
-              (remove-text-properties beg end '(display nil read-only nil)))))))))
-
-(defun roam-block-fontify-link ()
-  "Highlight roam-block link in all current frame's windows."
-  ;; fontify current buffer
-  (roam-block-link-fontify (point-min) (point-max))
-  ;; fontify all displayed windows
-  (let ((wins (window-list)))
-    (save-selected-window
-      (dolist (win wins)
-        (select-window win)
-        (when (roam-block-work-on)
-          (roam-block-link-fontify (point-min) (point-max)))))))
-
-;; Edit block
-
-(define-minor-mode roam-block-edit-mode
-  "Minor mode for editing a refered read only block."
-  :lighter ""
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-c C-k") #'roam-block--edit-abort)
-            (define-key map (kbd "C-c C-c") #'roam-block--edit-finalize)
-            map)
-  :require 'roam-block
-  (if roam-block-edit-mode
-      (setq-local header-line-format
-                  (substitute-command-keys
-                   "\\<roam-block-edit-mode-map>Edit block: `\\[roam-block--edit-finalize]' \
-to finish, `\\[roam-block--edit-abort]' to abort."))
-    (setq-local header-line-format nil))
-  (setq truncate-lines nil))
-
-(defun roam-block--edit-abort ()
-  "Abort editing the read only block content."
-  (interactive)
-  (switch-to-buffer (get-file-buffer roam-block-edit-block-file))
-  (kill-buffer roam-block-edit-buf))
-
-(defun roam-block--edit-finalize ()
-  "Finish editing the read only block content."
-  (interactive)
-  (let ((file roam-block-edit-block-file)
-        (origin-file roam-block-edit-block-origin-file)
-        (uuid roam-block-edit-block-uuid)
-        (origin-content roam-block-edit-block-content)
-        (content (buffer-substring-no-properties (point-min) (point-max))))
-    (with-current-buffer (find-file-noselect origin-file)
-      (save-excursion
-        (goto-char (point-min))
-        ;; have bugs!
-        (catch 'break
-          (while (search-forward origin-content nil t)
-            (when (string= uuid (get-char-property
-                                 (line-beginning-position) 'uuid))
-              (replace-match content)
-              (save-buffer)
-              (throw 'break nil))))))
-    (switch-to-buffer (get-file-buffer file))
-    (save-excursion
-      (goto-char (point-min))
-      (search-forward (format "((%s))" uuid) nil t)
-      (roam-block-link-fontify (match-beginning 0) (match-end 0)))
-    (kill-buffer roam-block-edit-buf)))
-
-(defun roam-block--get-block-uuid ()
-  "Get the uuid from block according to different postions of cursor."
-  (cond
-   ((button-at (point))
-    (string-trim (button-label (button-at (point))) "((" "))"))
-   ((save-excursion
-      (re-search-backward roam-block-link-re (line-beginning-position) t))
-    (match-string-no-properties 1))
-   ((save-excursion
-      (re-search-forward roam-block-link-re (line-end-position) t))
-    (match-string-no-properties 1))))
-
-;;;###autoload
-(defun roam-block-copy-link ()
-  "Save the roam-block link to kill-ring, use the block at point by default.
-If a region is active, copy all blocks' ref links that the region contains."
-  (interactive)
-  (cond
-   ((region-active-p)
-    (let ((beg (region-beginning))
-          (end (region-end))
-          ref-str)
-      (save-excursion
-        (goto-char beg)
-        (while (< (point) end)
-          (when-let ((uuid (get-char-property (point) 'uuid)))
-            (setq ref-str (concat ref-str (format "((%s))" uuid) "\n")))
-          (forward-line))
-        (kill-new ref-str))))
-   (t (save-excursion
-        (goto-char (line-beginning-position))
-        (kill-new (format "((%s))" (get-char-property (point) 'uuid))))))
-  (message "Have copyed the block refs."))
-
-;;;###autoload
-(defun roam-block-edit-block ()
-  "Edit the content of the read only block."
-  (interactive)
-  (let* ((file (buffer-file-name))
-         (uuid (roam-block--get-block-uuid))
-         (origin-file
-          (caar (roam-block-db-query
-                 `[:select file :from blocks :where (= uuid ,uuid)])))
-         (content (roam-block-db--block-content uuid))
-         (mode major-mode))
-    (if uuid
-        (with-current-buffer (get-buffer-create roam-block-edit-buf)
-          (insert content)
-          (setq major-mode mode)
-          (setq roam-block-edit-block-file file)
-          (setq roam-block-edit-block-origin-file origin-file)
-          (setq roam-block-edit-block-uuid uuid)
-          (setq roam-block-edit-block-content content)
-          (roam-block-edit-mode)
-          (switch-to-buffer roam-block-edit-buf))
-      (message "No block needs to be edited!"))))
-
 ;; Hook functions
 
 (defun roam-block--buffer-setting ()
@@ -348,7 +172,7 @@ file and cache them database."
   (when (roam-block-work-on)
     (unless (roam-block-restore-overlays)
       (roam-block-db-cache-file))
-    (roam-block-link-fontify (point-min) (point-max))
+    (roam-block-ref-fontify (point-min) (point-max))
     (roam-block--buffer-setting)))
 
 (defun roam-block--after-save-hook-function ()
@@ -359,7 +183,8 @@ Update caches of those changed blocks and fontify block ref links."
   ;; of text properties will lost.
   (when (roam-block-work-on)
     (roam-block-db-cache-file)
-    (roam-block-fontify-link)
+    ;; (roam-block-embed-sync)
+    (roam-block-ref-fontify-all)
     (roam-block--buffer-setting)))
 
 ;; Minor mode
@@ -378,15 +203,17 @@ Update caches of those changed blocks and fontify block ref links."
                     (executable-find "sqlite3"))
           (lwarn '(roam-block) :error "Cannot find executable 'sqlite3'. \
 Please make sure it is installed and can be found within `exec-path'."))
-        (jit-lock-register #'roam-block-link-fontify)
+        (jit-lock-register #'roam-block-ref-fontify)
         (add-hook 'find-file-hook #'roam-block--find-file-hook-function)
-        (add-hook 'after-save-hook #'roam-block--after-save-hook-function))
-    (jit-lock-unregister #'roam-block-link-fontify)
+        (add-hook 'after-save-hook #'roam-block--after-save-hook-function)
+        (add-hook 'kill-emacs-hook #'roam-block-db--close-all))
+    (jit-lock-unregister #'roam-block-ref-fontify)
     (remove-hook 'find-file-hook #'roam-block--find-file-hook-function)
     (remove-hook 'after-save-hook #'roam-block--after-save-hook-function)
+    (remove-hook 'kill-emacs-hook #'roam-block-db--close-all)
     (save-excursion
       (goto-char (point-min))
-      (while (re-search-forward roam-block-link-re nil t)
+      (while (re-search-forward roam-block-ref-re nil t)
         (with-silent-modifications
           (let ((inhibit-read-only t))
             (remove-text-properties (match-beginning 0) (match-end 0)

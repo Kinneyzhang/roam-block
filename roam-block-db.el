@@ -51,8 +51,9 @@
      [(path :primary-key)
       (ovs)])
     (blocks
-     [(uuid :primary-key)
+     [(uuid :not-null)
       (content :not-null)
+      (type :not-null)
       (file :not-null)]
      (:foreign-key [file] :references files [path] :on-delete :cascade)))
   "Table schemata of block-re-db.")
@@ -105,29 +106,50 @@ SQL can be either the emacsql vector representation, or a string."
     (dolist (table (mapcar #'car roam-block-db--table-schemata))
       (roam-block-db-query `[:delete :from ,table]))))
 
+(defun roam-block-db--close (&optional db)
+  "Closes the database connection for database DB.
+If DB is nil, closes the database connection for nil."
+  (unless db
+    (setq db (roam-block-db--get-connection nil)))
+  (when (and db (emacsql-live-p db))
+    (emacsql-close db)))
+
+(defun roam-block-db--close-all ()
+  "Closes all database connections made by roam-block"
+  (dolist (conn (hash-table-values roam-block-db--connection))
+    (roam-block-db--close conn))
+  (let ((keys (hash-table-keys roam-block-db--connection)))
+    (dolist (key keys)
+      (remhash key roam-block-db--connection))))
+
 (defun roam-block-db--block-content (uuid)
   "Return block content in database by UUID."
-  (caar (roam-block-db-query `[:select content :from blocks :where (= uuid ,uuid)])))
+  (caar (roam-block-db-query `[:select content :from blocks
+                                       :where (= uuid ,uuid)])))
+
+(defun roam-block-db--block-file (uuid)
+  "Return the file that blocks belongs to in database by UUID."
+  (caar (roam-block-db-query `[:select file :from blocks
+                                       :where (= uuid ,uuid)])))
 
 ;; Cache blocks
 
 (defun roam-block-db--block-update (uuid)
   "Insert the block cache in database if there doesn't exist.
-Update the block cache if there exists in database and has 
+Update the block cache if there exists in database and has
 changes in file. Otherwise, do nothing."
   (let ((content (roam-block--block-string))
         (file (buffer-file-name)))
     (if-let ((cached-content
               (caar (roam-block-db-query
-                     `[:select content :from blocks :where (= uuid ,uuid)]))))
-        (progn
-          ;; (message "cached-content: %s" cached-content)
-          ;; (message "content: %s" content)
-          (unless (string= cached-content content)
-            (roam-block-db-query `[:update blocks :set (= content ,content)
-                                           :where (= uuid ,uuid)])))
+                     `[:select content :from blocks
+                               :where (= uuid ,uuid)]))))
+        (unless (string= cached-content content)
+          (roam-block-db-query
+           `[:update blocks :set (= content ,content)
+                     :where (= uuid ,uuid)]))
       (roam-block-db-query `[:insert :into blocks
-                                     :values ([,uuid ,content ,file])]))))
+                                     :values ([,uuid ,content "origin" ,file])]))))
 
 (defun roam-block--has-overlay-caches ()
   "Judge if current buffer has overlay caches.

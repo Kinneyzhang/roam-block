@@ -34,6 +34,7 @@
 
 (require 'cl-lib)
 (require 'org-id)
+(require 'seq)
 
 ;;;; Declarations
 
@@ -57,6 +58,29 @@
       (when (re-search-forward roam-block-skip-start-re nil t)
         (setq content-beg (point)))
       (narrow-to-region content-beg content-end))))
+
+(defun roam-block--block-uuid ()
+  "Return the uuid of current block."
+  (get-char-property (line-beginning-position) 'uuid))
+
+(defun roam-block--block-content ()
+  "Return the content of current block."
+  (let* ((ov (car (overlays-at (line-beginning-position))))
+         (ov-beg (overlay-start ov))
+         (ov-end (overlay-end ov)))
+    (buffer-substring-no-properties ov-beg ov-end)))
+
+(defun roam-block--ref-uuid ()
+  "Return the uuid from block ref according to different postions of cursor."
+  (cond
+   ((button-at (point))
+    (string-trim (button-label (button-at (point))) "((" "))"))
+   ((save-excursion
+      (re-search-backward roam-block-link-re (line-beginning-position) t))
+    (match-string-no-properties 1))
+   ((save-excursion
+      (re-search-forward roam-block-link-re (line-end-position) t))
+    (match-string-no-properties 1))))
 
 (defun roam-block--block-region ()
   "Return the region of a block that matches `roam-block-block-re'."
@@ -115,6 +139,19 @@ that FILE belongs to.  If FILE is nil, use current buffer file."
                 (throw 'found nil))))))
       (when in-home
         (expand-file-name in-home)))))
+
+(defun roam-block--duplicate-uuids (seq)
+  "Return the list of duplicate elements in sequence SEQ."
+  (let ((seq (seq-sort #'string< seq))
+        (index "")
+        res)
+    (mapcar (lambda (elem)
+              (if (string= index elem)
+                  (unless (member index res)
+                    (push index res))
+                (setq index elem)))
+            seq)
+    res))
 
 (provide 'roam-block-util)
 ;;; roam-block-util.el ends here
