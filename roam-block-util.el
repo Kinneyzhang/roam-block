@@ -62,16 +62,27 @@
   (get-char-property (line-beginning-position) 'uuid))
 
 (defun roam-block--ref-uuid ()
-  "Return the uuid from block ref according to different postions of cursor."
+  "Return the (uuid (beg . end)) structure from block ref
+ according to different postions of cursor."
   (cond
    ((button-at (point))
-    (string-trim (button-label (button-at (point))) "((" "))"))
+    (let* ((btn (button-at (point)))
+           (beg (button-start btn))
+           (end (button-end btn))
+           (uuid (string-trim (button-label btn) "((" "))")))
+      `(,uuid ,beg ,end)))
    ((save-excursion
       (re-search-backward roam-block-ref-re (line-beginning-position) t))
-    (match-string-no-properties 1))
+    (let ((uuid (match-string-no-properties 1))
+          (beg (match-beginning 0))
+          (end (match-end 0)))
+      `(,uuid ,beg ,end)))
    ((save-excursion
       (re-search-forward roam-block-ref-re (line-end-position) t))
-    (match-string-no-properties 1))))
+    (let ((uuid (match-string-no-properties 1))
+          (beg (match-beginning 0))
+          (end (match-end 0)))
+      `(,uuid ,beg ,end)))))
 
 (defun roam-block-check-home ()
   "Check the value of `roam-block-home' variable.

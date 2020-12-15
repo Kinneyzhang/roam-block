@@ -94,9 +94,10 @@ distinguish it with the original block.")
                (end (match-end 0))
                (content (roam-block-db--block-content uuid))
                (propertized-content
-                (if roam-block-ref-highlight
-                    (propertize content 'face '(:underline "#aaa"))
-                  content)))
+                (when content
+                  (if roam-block-ref-highlight
+                      (propertize content 'face '(:underline "#aaa"))
+                    content))))
           (if content
               (with-silent-modifications
                 (add-text-properties beg end
@@ -206,7 +207,7 @@ If a region is active, copy all blocks' ref links that the region contains."
   "Edit the content of the ref block."
   (interactive)
   (let* ((file (buffer-file-name))
-         (uuid (roam-block--ref-uuid))
+         (uuid (car (roam-block--ref-uuid)))
          (origin-file (roam-block-db--block-file uuid))
          (content (roam-block-db--block-content uuid))
          (mode major-mode))
@@ -221,6 +222,18 @@ If a region is active, copy all blocks' ref links that the region contains."
           (roam-block-ref-edit-mode)
           (switch-to-buffer roam-block-ref-edit-buf))
       (message "(roam-block) No block ref here!"))))
+
+;;;###autoload
+(defun roam-block-ref-delete ()
+  "Delete the roam-block ref at point."
+  (interactive)
+  (let* ((lst (roam-block--ref-uuid))
+         (uuid (nth 0 lst))
+         (beg (nth 1 lst))
+         (end (nth 2 lst)))
+    (let ((inhibit-read-only t))
+      (remove-text-properties beg end '(read-only nil))
+      (delete-region beg end))))
 
 (provide 'roam-block-ref)
 ;;; roam-block-ref.el ends here
