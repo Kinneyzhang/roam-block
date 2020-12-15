@@ -41,7 +41,8 @@
 ;;;; Variables
 
 (defcustom roam-block-db-location
-  (expand-file-name "roam-block.db" (concat user-emacs-directory "roam-block"))
+  (expand-file-name "roam-block.db"
+                    (concat user-emacs-directory "roam-block"))
   "Database of roam-block."
   :type 'string
   :group 'roam-block)
@@ -49,7 +50,7 @@
 (defconst roam-block-db--table-schemata
   '((files
      [(path :primary-key)
-      (ovs)])
+      (regions)])
     (blocks
      [(uuid :not-null)
       (content :not-null)
@@ -134,12 +135,11 @@ If DB is nil, closes the database connection for nil."
 
 ;; Cache blocks
 
-(defun roam-block-db--block-update (uuid)
+(defun roam-block-db--block-update (uuid content)
   "Insert the block cache in database if there doesn't exist.
 Update the block cache if there exists in database and has
 changes in file. Otherwise, do nothing."
-  (let ((content (roam-block--block-string))
-        (file (buffer-file-name)))
+  (let ((file (buffer-file-name)))
     (if-let ((cached-content
               (caar (roam-block-db-query
                      `[:select content :from blocks
@@ -151,51 +151,65 @@ changes in file. Otherwise, do nothing."
       (roam-block-db-query `[:insert :into blocks
                                      :values ([,uuid ,content "origin" ,file])]))))
 
-(defun roam-block--has-overlay-caches ()
-  "Judge if current buffer has overlay caches.
-Return the overlay region (beg . end) list."
+(defun roam-block-db--have-regions ()
+  "Judge if current buffer has properties caches.
+Return the uuid property region (beg . end) list."
   (let ((file (buffer-file-name)))
-    (caar (roam-block-db-query `[:select ovs :from files :where (= path ,file)]))))
+    (caar (roam-block-db-query `[:select regions :from files
+                                         :where (= path ,file)]))))
 
-(defun roam-block--has-file-caches ()
+(defun roam-block-db--have-file ()
   "Judge if current buffer has file caches."
   (let ((file (buffer-file-name)))
-    (roam-block-db-query `[:select * :from files :where (= path ,file)])))
+    (roam-block-db-query `[:select * :from files
+                                   :where (= path ,file)])))
 
-(defun roam-block-db--init-files-table (file)
-  "Initialize FILE in the 'files' table for safety of foreign key constrain."
-  (roam-block-db-query `[:insert :into files :values [,file nil]]))
+(defun roam-block-db--init-files-table ()
+  "Initialize current buffer file in the 'files' table 
+for safety of foreign key constrain."
+  (let ((file (buffer-file-name)))
+    (roam-block-db-query `[:insert :into files
+                                   :values [,file nil]])))
 
-(defun roam-block-db--update-files-table (file)
-  "Update overlays in the 'files' table with the FILE file."
-  (roam-block-db-query `[:update files :set (= ovs ',(roam-block--ovs-region))
-                                 :where (= path ,file)]))
+(defun roam-block-db--update-block-region ()
+  "Update all block's (beg . end) cons of current buffer in database."
+  (save-excursion
+    (goto-char (point-min))
+    (let (region-lst match)
+      (while (setq match (text-property-search-forward 'uuid))
+        (push `(,(prop-match-beginning match) . ,(prop-match-end match)) region-lst))
+      (setq region-lst (reverse region-lst))
+      (when (roam-block-db--have-file)
+        (roam-block-db-query `[:update files :set
+                                       (= regions ',region-lst)
+                                       :where (= path ,(buffer-file-name))])))))
 
-(defun roam-block-db--delete-redundant-blocks (file uuid-lst)
-  "Delete redundant caches in the FILE by comparing the uuid list in database
-with UUID-LST list."
-  (let* ((cached-uuid-lst
-          (mapcar #'car (roam-block-db-query
-                         `[:select uuid :from blocks :where (= file ,file)])))
-         (redundant-uuid-lst (seq-filter (lambda (item)
-                                           (not (member item uuid-lst)))
-                                         cached-uuid-lst)))
-    (when redundant-uuid-lst
-      (dolist (uuid redundant-uuid-lst)
-        ;; FIXME: Delete overlay in `roam-block-ovs'.
-        (roam-block-db-query `[:delete :from blocks
-                                       :where (= uuid ,uuid)])))))
+(defun roam-block-db--delete-redundant-blocks (uuid-lst)
+  "Delete redundant caches of current buffer file by comparing 
+the uuid list in database with UUID-LST list."
+  (let ((file (buffer-file-name)))
+    (let* ((cached-uuid-lst
+            (mapcar #'car (roam-block-db-query
+                           `[:select uuid :from blocks
+                                     :where (= file ,file)])))
+           (redundant-uuid-lst
+            (seq-filter (lambda (item)
+                          (not (member item uuid-lst)))
+                        cached-uuid-lst)))
+      (when redundant-uuid-lst
+        (dolist (uuid redundant-uuid-lst)
+          (roam-block-db-query `[:delete :from blocks
+                                         :where (= uuid ,uuid)]))))))
 
 (defun roam-block-db-cache-file ()
   "Store current buffer's blocks in database."
   (when (roam-block-work-on)
-    (let ((file (buffer-file-name))
-          uuid-lst)
-      (unless (roam-block--has-file-caches)
-        (roam-block-db--init-files-table file))
-      (setq uuid-lst (roam-block-put-overlays file))
-      (roam-block-db--update-files-table file)
-      (roam-block-db--delete-redundant-blocks file uuid-lst))))
+    (let (uuid-lst)
+      (unless (roam-block-db--have-file)
+        (roam-block-db--init-files-table))
+      (setq uuid-lst (roam-block-propertize-buffer))
+      (roam-block-db--update-block-region)
+      (roam-block-db--delete-redundant-blocks uuid-lst))))
 
 (provide 'roam-block-db)
 ;;; roam-block-db.el ends here

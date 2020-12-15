@@ -59,104 +59,114 @@ In Windows, the directory separator character is '\\'."
   "Regular expression that matches contents needed to be skipped
 at the beginning of file, usually are some meta settings.")
 
-(defvar-local roam-block-ovs nil
-  "List of block overlays for each local buffer.")
-
-(defvar roam-block-linum nil
-  "The line number of a block.")
-
-(defvar roam-block-block-re "^.+$")
-
 ;;;; Functions
 
-(defun roam-block-insert-in-front (ov after &rest args)
-  "Move overlays when insert in front of a OV overlay.
-When AFTER is non-nil, call function after change,
-otherwise call function before change. ARGS are the rest arguments."
-  (if (null after)
-      (setq roam-block-linum (line-number-at-pos))
-    (unless (= roam-block-linum (line-number-at-pos))
-      (move-overlay ov (line-beginning-position) (line-end-position)))))
+(defun roam-block-insert-in-front (beg end)
+  "Function added to `insert-in-front-hooks'.
+BEG is the start position of inserted text.
+END is the end position of inserted text.
+This functiton reset the uuid propery region to BEG and block end."
+  (let* ((match (save-excursion (text-property-search-forward 'uuid)))
+         (match-end (prop-match-end match))
+         (uuid (prop-match-value match)))
+    (add-text-properties (line-beginning-position) match-end
+                         `(uuid ,uuid insert-in-front-hooks
+                                (roam-block-insert-in-front)))))
 
-(defun roam-block-insert-behind (ov after &rest args)
-  "Move overlays when insert behind of a OV overlay.
-When AFTER is non-nil, call function after change,
-otherwise call function before change. ARGS are the rest arguments."
-  (if (null after)
-      (setq roam-block-linum (line-number-at-pos))
-    (when (= roam-block-linum (line-number-at-pos))
-      (move-overlay ov (line-beginning-position) (line-end-position)))))
-
-(defun roam-block-overlay-block (beg end &optional uuid prop value)
-  "Put overlays between BEG and END. If UUID is non-nil, 
-use it as the value of uuid overlay.  
-If PROP and VALUE is non-nil, also put the overlay on this block."
-  (let ((uuid (or uuid (roam-block--get-uuid)))
-        (ov (make-overlay beg end)))
-    (push ov roam-block-ovs)
-    (overlay-put ov 'uuid uuid)
-    (overlay-put ov 'evaporate t)
-    (overlay-put ov 'insert-behind-hooks '(roam-block-insert-behind))
-    (overlay-put ov 'insert-in-front-hooks '(roam-block-insert-in-front))
+(defun roam-block-propertize-block (beg end &optional uuid prop value)
+  "Put uuid propery between BEG and END. If UUID is non-nil, 
+use it as the value of uuid property.  
+If PROP and VALUE is non-nil, also add the property on this block."
+  (let ((uuid (or uuid (roam-block--get-uuid))))
+    (add-text-properties beg end `(uuid ,uuid insert-in-front-hooks
+                                        (roam-block-insert-in-front)))
     (when (and prop value)
-      (overlay-put ov prop value))
+      (add-text-properties beg end `(,prop ,value)))
     uuid))
 
-(defun roam-block-restore-overlays ()
-  "Restore overlays from database in the file."
+(defun roam-block-restore-properties ()
+  "Restore uuid properties from database in the file."
   (when (roam-block-work-on)
-    (when-let ((ovs (roam-block--has-overlay-caches)))
-      (dolist (ov ovs)
-        (when-let* ((beg (car ov))
-                    (end (cdr ov))
+    (when-let ((regions (roam-block-db--have-regions)))
+      (dolist (region regions)
+        (when-let* ((beg (car region))
+                    (end (cdr region))
                     (content (buffer-substring-no-properties beg end))
+                    ;; FIXME: If the two blocks have the same content,
+                    ;; it doesn't make sense that choose the first one.
                     (uuid (caar (roam-block-db-query
                                  `[:select uuid :from blocks
                                            :where (= content ,content)]))))
-          (roam-block-overlay-block beg end uuid))))))
+          (roam-block-propertize-block beg end uuid))))))
 
-(defun roam-block-put-overlays (file)
-  "Put all block overlays in FILE and cache them in database.
-Return a list of uuid used for deleting redundant block records."
-  (with-current-buffer (find-file-noselect file)
-    (save-excursion
-      (save-restriction
-        (roam-block--narrow-to-content)
-        (goto-char (point-min))
-        (let ((file (buffer-file-name))
-              (forward-line-flag 0)
-              uuid-lst)
-          (catch 'break
-            (while (point)
-              ;; FIXME: Use diff to compare the twice file save,
-              ;; only update those changed blocks.
-              (cond
-               ((looking-at "^*+ .+?")
-                (setq forward-line-flag (forward-line))
-                (when (looking-at "^ *:PROPERTIES:\n")
-                  (re-search-forward
-                   "^ *:PROPERTIES:\n\\( *:.+?:.*\n\\)+ *:END:\n" nil t)))
-               ((looking-at "^ *$")
-                (setq forward-line-flag (forward-line)))
-               (t (let ((uuid (get-char-property (point) 'uuid)))
-                    ;; If current block doesn't have a uuid overlay,
-                    ;; add it and cache it in database.
-                    ;; If current block has a uuid overlay, query the database.
-                    ;; If the database contains current uuid,
-                    ;; check if the content and linum have changed, if changed,
-                    ;; update them in database. Otherwise, do nothing.
-                    (unless uuid
-                      (let ((beg (car (roam-block--block-region)))
-                            (end (cdr (roam-block--block-region))))
-                        ;; FIXME: use regexp to match a block region for
-                        ;; different situations in different types of files.
-                        (setq uuid (roam-block-overlay-block beg end))))
-                    (roam-block-db--block-update uuid)
-                    (push uuid uuid-lst)
-                    (setq forward-line-flag (forward-line)))))
-              (when (= forward-line-flag 1)
-                (throw 'break uuid-lst))))
-          uuid-lst)))))
+(defun roam-block-propertize-buffer ()
+  "Put uuid property to the whole buffer's valid blocks 
+according to the major mode MODE."
+  (pcase major-mode
+    ('org-mode (roam-block-propertize-org-buffer))))
+
+(defun roam-block-propertize-org-buffer ()
+  "Put uuid property to current org buffer's valid blocks."
+  (save-excursion
+    (save-restriction
+      (roam-block--narrow-to-content)
+      (goto-char (point-min))
+      (let ((file (buffer-file-name))
+            uuid-lst)
+        (while (< (point) (point-max))
+          ;; FIXME: Use diff to compare the twice file save,
+          ;; only update those changed blocks.
+          (let* ((elem (org-element-at-point))
+                 (elem-type (org-element-type elem)))
+            (pcase elem-type
+              ((guard (looking-at "^ *$"))
+               (forward-line))
+              ('headline
+               (forward-line))
+              ('property-drawer
+               (goto-char (org-element-property :end elem)))
+              ('paragraph
+               (let* ((uuid (get-char-property (point) 'uuid))
+                      (beg (org-element-property :contents-begin elem))
+                      (end (org-element-property :contents-end elem))
+                      content)
+                 ;; FIXME: consider the condition of the last line, do
+                 ;; not need to minus 1 from end.
+                 (unless uuid
+                   (setq uuid (roam-block-propertize-block beg (1- end))))
+                 (setq content (buffer-substring-no-properties beg (1- end)))
+                 (roam-block-db--block-update uuid content)
+                 (push uuid uuid-lst)
+                 (goto-char end)))
+              ('plain-list
+               (let* ((uuid (get-char-property (point) 'uuid))
+                      (structure (org-element-property :structure elem))
+                      (tree (car structure))
+                      (beg (car tree))
+                      (end (car (last tree)))
+                      content)
+                 (unless uuid
+                   (setq uuid (roam-block-propertize-block beg (1- end))))
+                 (setq content (buffer-substring-no-properties beg (1- end)))
+                 (roam-block-db--block-update uuid content)
+                 (push uuid uuid-lst)
+                 (goto-char end)))
+              (_ (let* ((uuid (get-char-property (point) 'uuid))
+                        (beg (org-element-property :begin elem))
+                        (end (org-element-property :end elem))
+                        (content (string-trim-right
+                                  (buffer-substring-no-properties beg end) "\n"))
+                        (blank (org-element-property :post-blank elem))
+                        (block-end (- end blank))
+                        content)
+                   (unless uuid
+                     (setq uuid (roam-block-propertize-block
+                                 beg (1- block-end))))
+                   (setq content (buffer-substring-no-properties beg (1- block-end)))
+                   (roam-block-db--block-update uuid content)
+                   (push uuid uuid-lst)
+                   (goto-char end))))))
+        uuid-lst))))
 
 ;; Hook functions
 
@@ -166,11 +176,11 @@ Return a list of uuid used for deleting redundant block records."
 
 (defun roam-block--find-file-hook-function ()
   "Roam-block function binded to `find-file-hook'.
-If there exists caches of the file, restore overlays of the file buffer.
-If there doesn't exist caches of the file, put overlays for each block in
+If there exists caches of the file, restore properties of the file buffer.
+If there doesn't exist caches of the file, add properties for each block in
 file and cache them database."
   (when (roam-block-work-on)
-    (unless (roam-block-restore-overlays)
+    (unless (roam-block-restore-properties)
       (roam-block-db-cache-file))
     (roam-block-ref-fontify (point-min) (point-max))
     (roam-block--buffer-setting)))
@@ -203,6 +213,7 @@ Update caches of those changed blocks and fontify block ref links."
                     (executable-find "sqlite3"))
           (lwarn '(roam-block) :error "Cannot find executable 'sqlite3'. \
 Please make sure it is installed and can be found within `exec-path'."))
+        (roam-block-db)
         (jit-lock-register #'roam-block-ref-fontify)
         (add-hook 'find-file-hook #'roam-block--find-file-hook-function)
         (add-hook 'after-save-hook #'roam-block--after-save-hook-function)

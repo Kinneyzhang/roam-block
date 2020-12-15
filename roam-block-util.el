@@ -39,8 +39,6 @@
 ;;;; Declarations
 
 (defvar roam-block-skip-start-re)
-(defvar roam-block-block-re)
-(defvar roam-block-ovs)
 (defvar roam-block-home)
 
 ;;;; Utility Functions
@@ -63,45 +61,17 @@
   "Return the uuid of current block."
   (get-char-property (line-beginning-position) 'uuid))
 
-(defun roam-block--block-content ()
-  "Return the content of current block."
-  (let* ((ov (car (overlays-at (line-beginning-position))))
-         (ov-beg (overlay-start ov))
-         (ov-end (overlay-end ov)))
-    (buffer-substring-no-properties ov-beg ov-end)))
-
 (defun roam-block--ref-uuid ()
   "Return the uuid from block ref according to different postions of cursor."
   (cond
    ((button-at (point))
     (string-trim (button-label (button-at (point))) "((" "))"))
    ((save-excursion
-      (re-search-backward roam-block-link-re (line-beginning-position) t))
+      (re-search-backward roam-block-ref-re (line-beginning-position) t))
     (match-string-no-properties 1))
    ((save-excursion
-      (re-search-forward roam-block-link-re (line-end-position) t))
+      (re-search-forward roam-block-ref-re (line-end-position) t))
     (match-string-no-properties 1))))
-
-(defun roam-block--block-region ()
-  "Return the region of a block that matches `roam-block-block-re'."
-  (save-excursion
-    (re-search-forward roam-block-block-re nil t)
-    (cons (match-beginning 0) (match-end 0))))
-
-(defun roam-block--block-string ()
-  "Return the string of a block that matches `roam-block-block-re'."
-  (save-excursion
-    (re-search-forward roam-block-block-re nil t)
-    (match-string-no-properties 0)))
-
-(defun roam-block--ovs-region ()
-  "Return a list of (beg . end) cons of all roam-block overlays."
-  (reverse
-   (delete-dups
-    (mapcar (lambda (ov)
-              (cons (overlay-start ov)
-                    (overlay-end ov)))
-            roam-block-ovs))))
 
 (defun roam-block-check-home ()
   "Check the value of `roam-block-home' variable.

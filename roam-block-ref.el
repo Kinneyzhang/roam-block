@@ -46,6 +46,10 @@
 (defvar roam-block-ref-edit-buf "*Roam Block Edit*"
   "Name of buffer for editing blocks.")
 
+(defvar roam-block-ref-highlight t
+  "Non-nil means to highlight the refered block display and
+distinguish it with the original block.")
+
 (defvar-local roam-block-ref-uuid nil
   "The uuid of block in edit buffer.")
 
@@ -62,7 +66,7 @@
 
 (define-button-type 'roam-block-ref
   'action #'roam-block-follow-ref
-  'face '(:underline "#aaa")
+  'face nil
   'content nil
   'follow-link nil
   'help-echo "Jump to this block.")
@@ -88,14 +92,20 @@
         (let* ((uuid (match-string-no-properties 1))
                (beg (match-beginning 0))
                (end (match-end 0))
-               (content (roam-block-db--block-content uuid)))
+               (content (roam-block-db--block-content uuid))
+               (propertized-content
+                (if roam-block-ref-highlight
+                    (propertize content 'face '(:underline "#aaa"))
+                  content)))
           (if content
               (with-silent-modifications
-                (add-text-properties beg end `(display ,content read-only t))
+                (add-text-properties beg end
+                                     `(display ,propertized-content
+                                               read-only t))
                 (make-text-button beg end :type 'roam-block-ref
                                   'content content))
             (with-silent-modifications
-              (remove-text-properties beg end '(display nil read-only nil)))))))))
+              (remove-text-properties beg end '(display nil read-only nil face nil)))))))))
 
 (defun roam-block-ref-fontify-all ()
   "Highlight roam-block link in all current frame's windows."
@@ -145,11 +155,21 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
       (save-excursion
         (goto-char (point-min))
         ;; have bugs!
+        (message "file: %s" file)
+        (message "origin file: %s" origin-file)
+        (message "uuid: %s" uuid)
+        (message "original content: %s" origin-content)
+        (message "new content: %s" content)
         (catch 'break
           (while (search-forward origin-content nil t)
+            (message "found the same content!")
             (when (string= uuid (get-char-property
                                  (line-beginning-position) 'uuid))
+              (message "found the original uuid one!")
               (replace-match content)
+              (let ((beg (match-beginning 0))
+                    (len (length content)))
+                (roam-block-propertize-block beg (+ beg len) uuid))
               (save-buffer)
               (throw 'break nil))))))
     (switch-to-buffer (get-file-buffer file))
@@ -193,7 +213,7 @@ If a region is active, copy all blocks' ref links that the region contains."
     (if uuid
         (with-current-buffer (get-buffer-create roam-block-ref-edit-buf)
           (insert content)
-          (setq major-mode mode)
+          (funcall mode)
           (setq roam-block-ref-in-file file)
           (setq roam-block-ref-original-file origin-file)
           (setq roam-block-ref-uuid uuid)
