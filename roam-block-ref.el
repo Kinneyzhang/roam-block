@@ -1,4 +1,4 @@
-;;; roam-block-ref.el --- Block ref functions -*- lexical-binding: t; -*-
+;;; roam-block-ref.el --- Block ref functions -*- coding: utf-8; lexical-binding: t; -*-
 
 ;; Copyright (C) 2020 Kinney Zhang
 ;;
@@ -155,12 +155,6 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
     (with-current-buffer (find-file-noselect origin-file)
       (save-excursion
         (goto-char (point-min))
-        ;; have bugs!
-        (message "file: %s" file)
-        (message "origin file: %s" origin-file)
-        (message "uuid: %s" uuid)
-        (message "original content: %s" origin-content)
-        (message "new content: %s" content)
         (catch 'break
           (while (search-forward origin-content nil t)
             (message "found the same content!")
@@ -225,6 +219,8 @@ If a region is active, copy all blocks' ref links that the region contains."
   (let ((beg (point)) end)
     (insert roam-block-stored-ref)
     (setq end (point))
+    (unless (roam-block--block-uuid)
+      (roam-block-propertize-block beg end))
     (roam-block-ref-fontify beg end)))
 
 ;;;###autoload

@@ -1,4 +1,4 @@
-;;; roam-block.el --- An all-purpose block ref and block embed implement in emacs -*- lexical-binding: t; -*-
+;;; roam-block.el --- An all-purpose block ref and block embed implement in emacs -*- coding: utf-8; lexical-binding: t; -*-
 
 ;; Copyright (C) 2020 Kinney Zhang
 ;;

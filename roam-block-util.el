@@ -1,4 +1,4 @@
-;;; roam-block-util.el --- Utility functions -*- lexical-binding: t; -*-
+;;; roam-block-util.el --- Utility functions -*- coding: utf-8; lexical-binding: t; -*-
 
 ;; Copyright (C) 2020 Kinney Zhang
 ;;
