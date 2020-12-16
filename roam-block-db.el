@@ -181,14 +181,17 @@ for safety of foreign key constrain."
   "Update all block's (beg . end) cons of current buffer in database."
   (save-excursion
     (goto-char (point-min))
-    (let (region-lst match)
+    (let ((print-length nil)
+          ;; Do not limit the length of list to print.
+          region-lst match)
       (while (setq match (text-property-search-forward 'uuid))
-        (push `(,(prop-match-beginning match) . ,(prop-match-end match)) region-lst))
+        (push (cons (prop-match-beginning match) (prop-match-end match))
+              region-lst))
       (setq region-lst (reverse region-lst))
       (when (roam-block-db--have-file)
-        (roam-block-db-query `[:update files :set
-                                       (= regions ',region-lst)
-                                       :where (= path ,(buffer-file-name))])))))
+        (roam-block-db-query
+         `[:update files :set (= regions ',region-lst)
+                   :where (= path ,(buffer-file-name))])))))
 
 (defun roam-block-db--delete-redundant-blocks (uuid-lst)
   "Delete redundant caches of current buffer file by comparing 

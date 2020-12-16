@@ -70,7 +70,8 @@ distinguish it with the original block.")
   'action #'roam-block-follow-ref
   'face nil
   'content nil
-  'follow-link t
+  'follow-link nil
+  'mouse-face nil
   'help-echo "Jump to this block.")
 
 (defun roam-block-follow-ref (button)
@@ -88,7 +89,7 @@ distinguish it with the original block.")
           (erase-buffer))
         (org-mode)
         (insert (propertize content 'font-lock-face
-                            '(italic bold (:height 1.2))) "\n\n")
+                            '(italic (:height 1.2))) "\n\n")
         (insert (format "* %d Linked References\n\n" num))
         (dolist (group groups)
           (let ((file (car group))

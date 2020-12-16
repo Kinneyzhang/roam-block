@@ -133,6 +133,29 @@ according to the major mode MODE."
   (pcase major-mode
     ('org-mode (roam-block-propertize-org-buffer))))
 
+(defun roam-block-block-property-update (block-beg block-end)
+  "Update current block's uuid property.
+
+If there's no uuid property on current block, add it and return the uuid.
+If there's uuid property, compare the property range with block range.
+
+If the two are equal, return the uuid. Otherwise, set property range to
+the new block range and return the uuid.
+
+BLOCK-BEG is the beginning of the block. BLOCK-END is the end of the block."
+  (let ((uuid (get-char-property (point) 'uuid))
+        match match-end)
+    (if uuid
+        (progn
+          (setq match (save-excursion
+                        (text-property-search-forward 'uuid)))
+          (setq match-end (prop-match-end match))
+          (unless (= match-end block-end)
+            ;; Make sure all lines in this paragraph are propertized
+            (roam-block-propertize-block block-beg block-end uuid)))
+      (setq uuid (roam-block-propertize-block block-beg block-end)))
+    uuid))
+
 (defun roam-block-propertize-org-buffer ()
   "Put uuid property to current org buffer's valid blocks."
   (save-excursion
@@ -154,62 +177,33 @@ according to the major mode MODE."
               ('property-drawer
                (goto-char (org-element-property :end elem)))
               ('paragraph
-               (let* ((uuid (get-char-property (point) 'uuid))
-                      (beg (org-element-property :contents-begin elem))
+               (let* ((beg (org-element-property :contents-begin elem))
                       (end (org-element-property :contents-end elem))
                       (block-end (1- end))
-                      (match (save-excursion
-                               (text-property-search-forward 'uuid)))
-                      (match-end (prop-match-end match))
-                      content)
+                      (content (buffer-substring-no-properties beg block-end))
+                      (uuid (roam-block-block-property-update beg block-end)))
                  ;; FIXME: consider the condition of the last line, do
                  ;; not need to minus 1 from end.
-                 (if uuid
-                     (unless (= match-end block-end)
-                       ;; Make sure all lines in this paragraph are propertized
-                       (roam-block-propertize-block beg block-end uuid))
-                   (setq uuid (roam-block-propertize-block beg block-end)))
-                 (setq content (buffer-substring-no-properties beg block-end))
                  (roam-block-db--block-update uuid content)
                  (push uuid uuid-lst)
                  (goto-char end)))
               ('plain-list
-               (let* ((uuid (get-char-property (point) 'uuid))
-                      (structure (org-element-property :structure elem))
+               (let* ((structure (org-element-property :structure elem))
                       (tree (car structure))
                       (beg (car tree))
                       (end (car (last tree)))
                       (block-end (1- end))
-                      (match (save-excursion
-                               (text-property-search-forward 'uuid)))
-                      (match-end (prop-match-end match))
-                      content)
-                 (if uuid
-                     (unless (= match-end block-end)
-                       ;; Make sure all lines in this paragraph are propertized
-                       (roam-block-propertize-block beg block-end uuid))
-                   (setq uuid (roam-block-propertize-block beg block-end)))
-                 (setq content (buffer-substring-no-properties beg block-end))
+                      (content (buffer-substring-no-properties beg block-end))
+                      (uuid (roam-block-block-property-update beg block-end)))
                  (roam-block-db--block-update uuid content)
                  (push uuid uuid-lst)
                  (goto-char end)))
-              (_ (let* ((uuid (get-char-property (point) 'uuid))
-                        (beg (org-element-property :begin elem))
+              (_ (let* ((beg (org-element-property :begin elem))
                         (end (org-element-property :end elem))
-                        (content (string-trim-right
-                                  (buffer-substring-no-properties beg end) "\n"))
                         (blank (org-element-property :post-blank elem))
                         (block-end (- end blank 1))
-                        (match (save-excursion
-                                 (text-property-search-forward 'uuid)))
-                        (match-end (prop-match-end match))
-                        content)
-                   (if uuid
-                       (unless (= match-end block-end)
-                         ;; Make sure all lines in this paragraph are propertized
-                         (roam-block-propertize-block beg block-end uuid))
-                     (setq uuid (roam-block-propertize-block beg block-end)))
-                   (setq content (buffer-substring-no-properties beg block-end))
+                        (content (buffer-substring-no-properties beg block-end))
+                        (uuid (roam-block-block-property-update beg block-end)))
                    (roam-block-db--block-update uuid content)
                    (push uuid uuid-lst)
                    (goto-char end))))))
