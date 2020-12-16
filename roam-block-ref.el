@@ -32,7 +32,6 @@
 
 ;;;; Requires
 
-(require 'roam-block-util)
 (require 'roam-block-db)
 
 ;;;; Variables

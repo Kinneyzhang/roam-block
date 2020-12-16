@@ -32,7 +32,6 @@
 
 ;;;; Requires
 
-(require 'seq)
 (require 'emacsql)
 (require 'emacsql-sqlite3)
 

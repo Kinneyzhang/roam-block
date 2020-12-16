@@ -33,8 +33,8 @@
 ;;;; Requires
 
 (require 'subr-x)
+(require 'org-element)
 
-(require 'roam-block-db)
 (require 'roam-block-ref)
 ;; (require 'roam-block-embed)
 
