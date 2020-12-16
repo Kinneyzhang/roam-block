@@ -180,27 +180,52 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
       (roam-block-ref-fontify (match-beginning 0) (match-end 0)))
     (kill-buffer roam-block-ref-edit-buf)))
 
+(defvar roam-block-stored-ref nil
+  "Roam block ref that have stored.")
+
 ;;;###autoload
-(defun roam-block-ref-copy ()
-  "Save the roam-block ref to kill-ring, use the block at point by default.
+(defun roam-block-ref-store ()
+  "Store the roam-block ref to kill-ring, use the block at point by default.
 If a region is active, copy all blocks' ref links that the region contains."
   (interactive)
   (cond
    ((region-active-p)
     (let ((beg (region-beginning))
           (end (region-end))
-          ref-str)
+          ref-str block-end)
       (save-excursion
         (goto-char beg)
         (while (< (point) end)
-          (when-let ((uuid (get-char-property (point) 'uuid)))
-            (setq ref-str (concat ref-str (format "((%s))" uuid) "\n")))
-          (forward-line))
-        (kill-new ref-str))))
+          (if-let ((uuid (roam-block--block-uuid)))
+              (progn
+                (setq block-end (roam-block--block-end))
+                (setq ref-str (concat ref-str (format "((%s))" uuid) "\n"))
+                (goto-char block-end)
+                (forward-line))
+            (setq ref-str (concat ref-str "\n"
+                                  (buffer-substring-no-properties
+                                   (line-beginning-position)
+                                   (line-end-position))))
+            (forward-line)))
+        (setq roam-block-stored-ref ref-str))))
    (t (save-excursion
-        (goto-char (line-beginning-position))
-        (kill-new (format "((%s))" (get-char-property (point) 'uuid))))))
-  (message "(roam-block) Copyed the block refs."))
+        (let ((uuid (get-char-property (point) 'uuid)))
+          (if uuid
+              (setq roam-block-stored-ref (format "((%s))" uuid))
+            (setq uuid (get-char-property (line-beginning-position) 'uuid))
+            (if uuid
+                (setq roam-block-stored-ref (format "((%s))" uuid))
+              (user-error "(roam-block) No valid block here!")))))))
+  (message "(roam-block) The block refs are stored."))
+
+;;;###autoload
+(defun roam-block-ref-insert ()
+  "Insert the stored roam-block ref at point."
+  (interactive)
+  (let ((beg (point)) end)
+    (insert roam-block-stored-ref)
+    (setq end (point))
+    (roam-block-ref-fontify beg end)))
 
 ;;;###autoload
 (defun roam-block-ref-edit ()

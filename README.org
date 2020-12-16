@@ -20,10 +20,13 @@
  #+BEGIN_SRC emacs-lisp
  (add-to-list 'load-path "path/to/roam-block/")
  (require 'roam-block)
- (setq 'roam-block-home '("~/roam-block/"))
+ (setq roam-block-home '("~/roam-block/")
+       roam-block-ref-highlight nil)
  (roam-block-mode 1)
- (define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-ref-copy)
+ (define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-ref-store)
+ (define-key roam-block-mode-map (kbd "C-c b i") #'roam-block-ref-insert)
  (define-key roam-block-mode-map (kbd "C-c b e") #'roam-block-ref-edit)
+ (define-key roam-block-mode-map (kbd "C-c b d") #'roam-block-ref-delete)
  #+END_SRC
 
  If you prefer 'use-package', use the following codes:
@@ -32,20 +35,33 @@
  (use-package roam-block
    :load-path "path/to/roam-block/"
    :hook (after-init . roam-block-mode)
-   :init (setq roam-block-home '("~/roam-block/"))
+   :init (setq roam-block-home '("~/roam-block/")
+               roam-block-ref-highlight nil)
    :bind
    (:map roam-block-mode-map
-         (("C-c b c" . roam-block-ref-copy)
-          ("C-c b e" . roam-block-ref-edit))))
+         (("C-c b s" . roam-block-ref-store)
+          ("C-c b i" . roam-block-ref-insert)
+          ("C-c b e" . roam-block-ref-edit)
+          ("C-c b d" . roam-block-ref-delete))))
  #+END_SRC
 
 ** Usage
  
-   =roam-block-ref-copy=\\
-   Copy the ref of current block or blocks in an active region, then press =C-y= to paste the ref at where you want to refer the blocks.
+   =roam-block-ref-store= ::
 
-   =roam-block-ref-edit=\\
+   Store the ref of current block or blocks in an active region.
+
+   =roam-block-ref-insert= ::
+
+   Insert the ref at where you want to refer the blocks.
+   
+   =roam-block-ref-edit= ::
+   
    By default, the block ref is read only. Use this command to edit the displayed content in an edit buffer.
+
+   =roam-block-ref-delete= ::
+
+   Delete the read only block ref at point or close to current point.
 
 ** License
    Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].

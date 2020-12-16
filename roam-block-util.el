@@ -57,6 +57,11 @@
         (setq content-beg (point)))
       (narrow-to-region content-beg content-end))))
 
+(defun roam-block--block-end ()
+  "Return the end point of current block."
+  (let ((match (text-property-search-forward 'uuid)))
+    (prop-match-end match)))
+
 (defun roam-block--block-uuid ()
   "Return the uuid of current block."
   (get-char-property (line-beginning-position) 'uuid))
