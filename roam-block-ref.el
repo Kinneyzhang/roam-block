@@ -50,6 +50,9 @@
   "Non-nil means to highlight the refered block display and
 distinguish it with the original block.")
 
+(defvar roam-block-stored-ref nil
+  "Roam block ref that have stored.")
+
 (defvar-local roam-block-ref-uuid nil
   "The uuid of block in edit buffer.")
 
@@ -68,18 +71,38 @@ distinguish it with the original block.")
   'action #'roam-block-follow-ref
   'face nil
   'content nil
-  'follow-link nil
+  'follow-link t
   'help-echo "Jump to this block.")
 
-(defun roam-block-follow-ref (btn)
+(defun roam-block-follow-ref (button)
   "Jump to block references buffer after follow roam-block ref link."
   (with-demoted-errors "Error when following the link: %s"
-    (let ((content (button-get btn 'content)))
+    (let* ((content (button-get button 'content))
+           (ref (button-label button))
+           (data (roam-block-db--linked-ref-data ref))
+           (num (length data))
+           (groups (seq-group-by #'car data)))
       (with-current-buffer (get-buffer-create roam-block-ref-buf)
         ;; Should set the buffer mode to the
         ;; origin uuid block file's major mode.
-        (erase-buffer)
-        (insert (propertize content 'face '(:height 1.2)))
+        (let ((inhibit-read-only t))
+          (erase-buffer))
+        (org-mode)
+        (insert (propertize content 'font-lock-face
+                            '(italic bold (:height 1.2))) "\n\n")
+        (insert (format "* %d Linked References\n\n" num))
+        (dolist (group groups)
+          (let ((file (car group))
+                (items (cdr group)))
+            (insert (format "** [[file:%s][%s]]\n\n" file file))
+            (dolist (item items)
+              (let ((content (nth 1 item))
+                    (uuid (nth 2 item)))
+                (insert (format "%s\n\n" content))))))
+        (indent-region (point-min) (point-max))
+        (goto-char (point-min))
+        (roam-block-ref-fontify (point-min) (point-max))
+        (roam-block--buffer-setting)
         (setq-local header-line-format "View Buffer: Press 'q' to quit."))
       (view-buffer roam-block-ref-buf))))
 
@@ -173,9 +196,6 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
       (search-forward (format "((%s))" uuid) nil t)
       (roam-block-ref-fontify (match-beginning 0) (match-end 0)))
     (kill-buffer roam-block-ref-edit-buf)))
-
-(defvar roam-block-stored-ref nil
-  "Roam block ref that have stored.")
 
 ;;;###autoload
 (defun roam-block-ref-store ()

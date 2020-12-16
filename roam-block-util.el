@@ -107,7 +107,7 @@ Return the value of 'roam-block-home'."
         home)
     (user-error "Please set `roam-block-home' variable properly!")))
 
-(defun roam-block-work-on (&optional file)
+(defun roam-block-work-home (&optional file)
   "Return the home directory or file in `roam-block-home' 
 that FILE belongs to.  If FILE is nil, use current buffer file."
   (let ((file (or file (buffer-file-name)))
@@ -125,6 +125,11 @@ that FILE belongs to.  If FILE is nil, use current buffer file."
                 (throw 'found nil))))))
       (when in-home
         (expand-file-name in-home)))))
+
+(defun roam-block-work-on ()
+  "Judge if `roam-block-mode' can work on current buffer."
+  (or (string= (buffer-name) roam-block-ref-buf)
+      (roam-block-work-home)))
 
 (defun roam-block--duplicate-uuids (seq)
   "Return the list of duplicate elements in sequence SEQ."

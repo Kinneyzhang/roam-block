@@ -69,24 +69,52 @@ This functiton reset the uuid propery region to BEG and block end."
   (let* ((match (save-excursion (text-property-search-forward 'uuid)))
          (match-end (prop-match-end match))
          (uuid (prop-match-value match)))
-    (add-text-properties (line-beginning-position) match-end
-                         `(uuid ,uuid insert-in-front-hooks
-                                (roam-block-insert-in-front)))))
+    (let ((inhibit-read-only t))
+      (add-text-properties (line-beginning-position) match-end
+                           `(uuid ,uuid
+                                  insert-in-front-hooks
+                                  (roam-block-insert-in-front)
+                                  insert-behind-hooks
+                                  (roam-block-insert-behind))))))
+
+(defun roam-block-insert-behind (beg end) 
+  "Function added to `insert-behind-hooks'.
+BEG is the start position of inserted text.
+END is the end position of inserted text.
+This functiton reset the uuid propery region to BEG and block end."
+  (let* ((match (save-excursion (text-property-search-backward 'uuid)))
+         (match-beg (prop-match-beginning match))
+         (uuid (prop-match-value match))
+         (inserted-str (buffer-substring-no-properties beg end)))
+    (cond
+     ((string= inserted-str "\n")
+      (set-text-properties beg end nil))
+     (t (let ((inhibit-read-only t))
+          (add-text-properties match-beg (line-end-position)
+                               `(uuid ,uuid
+                                      insert-in-front-hooks
+                                      (roam-block-insert-in-front)
+                                      insert-behind-hooks
+                                      (roam-block-insert-behind))))))))
 
 (defun roam-block-propertize-block (beg end &optional uuid prop value)
   "Put uuid propery between BEG and END. If UUID is non-nil, 
 use it as the value of uuid property.  
 If PROP and VALUE is non-nil, also add the property on this block."
-  (let ((uuid (or uuid (roam-block--get-uuid))))
-    (add-text-properties beg end `(uuid ,uuid insert-in-front-hooks
-                                        (roam-block-insert-in-front)))
+  (let ((uuid (or uuid (roam-block--get-uuid)))
+        (inhibit-read-only t))
+    (add-text-properties beg end `(uuid ,uuid
+                                        insert-in-front-hooks
+                                        (roam-block-insert-in-front)
+                                        insert-behind-hooks
+                                        (roam-block-insert-behind)))
     (when (and prop value)
       (add-text-properties beg end `(,prop ,value)))
     uuid))
 
 (defun roam-block-restore-properties ()
   "Restore uuid properties from database in the file."
-  (when (roam-block-work-on)
+  (when (roam-block-work-home)
     (when-let ((regions (roam-block-db--have-regions)))
       (dolist (region regions)
         (when-let* ((beg (car region))
@@ -129,12 +157,19 @@ according to the major mode MODE."
                (let* ((uuid (get-char-property (point) 'uuid))
                       (beg (org-element-property :contents-begin elem))
                       (end (org-element-property :contents-end elem))
+                      (block-end (1- end))
+                      (match (save-excursion
+                               (text-property-search-forward 'uuid)))
+                      (match-end (prop-match-end match))
                       content)
                  ;; FIXME: consider the condition of the last line, do
                  ;; not need to minus 1 from end.
-                 (unless uuid
-                   (setq uuid (roam-block-propertize-block beg (1- end))))
-                 (setq content (buffer-substring-no-properties beg (1- end)))
+                 (if uuid
+                     (unless (= match-end block-end)
+                       ;; Make sure all lines in this paragraph are propertized
+                       (roam-block-propertize-block beg block-end uuid))
+                   (setq uuid (roam-block-propertize-block beg block-end)))
+                 (setq content (buffer-substring-no-properties beg block-end))
                  (roam-block-db--block-update uuid content)
                  (push uuid uuid-lst)
                  (goto-char end)))
@@ -144,10 +179,17 @@ according to the major mode MODE."
                       (tree (car structure))
                       (beg (car tree))
                       (end (car (last tree)))
+                      (block-end (1- end))
+                      (match (save-excursion
+                               (text-property-search-forward 'uuid)))
+                      (match-end (prop-match-end match))
                       content)
-                 (unless uuid
-                   (setq uuid (roam-block-propertize-block beg (1- end))))
-                 (setq content (buffer-substring-no-properties beg (1- end)))
+                 (if uuid
+                     (unless (= match-end block-end)
+                       ;; Make sure all lines in this paragraph are propertized
+                       (roam-block-propertize-block beg block-end uuid))
+                   (setq uuid (roam-block-propertize-block beg block-end)))
+                 (setq content (buffer-substring-no-properties beg block-end))
                  (roam-block-db--block-update uuid content)
                  (push uuid uuid-lst)
                  (goto-char end)))
@@ -157,12 +199,17 @@ according to the major mode MODE."
                         (content (string-trim-right
                                   (buffer-substring-no-properties beg end) "\n"))
                         (blank (org-element-property :post-blank elem))
-                        (block-end (- end blank))
+                        (block-end (- end blank 1))
+                        (match (save-excursion
+                                 (text-property-search-forward 'uuid)))
+                        (match-end (prop-match-end match))
                         content)
-                   (unless uuid
-                     (setq uuid (roam-block-propertize-block
-                                 beg (1- block-end))))
-                   (setq content (buffer-substring-no-properties beg (1- block-end)))
+                   (if uuid
+                       (unless (= match-end block-end)
+                         ;; Make sure all lines in this paragraph are propertized
+                         (roam-block-propertize-block beg block-end uuid))
+                     (setq uuid (roam-block-propertize-block beg block-end)))
+                   (setq content (buffer-substring-no-properties beg block-end))
                    (roam-block-db--block-update uuid content)
                    (push uuid uuid-lst)
                    (goto-char end))))))
@@ -179,7 +226,7 @@ according to the major mode MODE."
 If there exists caches of the file, restore properties of the file buffer.
 If there doesn't exist caches of the file, add properties for each block in
 file and cache them database."
-  (when (roam-block-work-on)
+  (when (roam-block-work-home)
     (unless (roam-block-restore-properties)
       (roam-block-db-cache-file))
     (roam-block-ref-fontify (point-min) (point-max))
@@ -191,7 +238,7 @@ Update caches of those changed blocks and fontify block ref links."
   ;; FIXME: Cannot work properly in markdown-mode.
   ;; After the md buffer is saved, the display attribute
   ;; of text properties will lost.
-  (when (roam-block-work-on)
+  (when (roam-block-work-home)
     (roam-block-db-cache-file)
     ;; (roam-block-embed-sync)
     (roam-block-ref-fontify-all)

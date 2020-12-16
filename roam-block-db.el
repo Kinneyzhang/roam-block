@@ -79,7 +79,7 @@
 Initializes and stores the database, and the database connection."
   (let* ((path (buffer-file-name))
          (home (roam-block-check-home))
-         (curr-home (roam-block-work-on path)))
+         (curr-home (roam-block-work-home path)))
     (unless (and (roam-block-db--get-connection curr-home)
                  (emacsql-live-p (roam-block-db--get-connection curr-home)))
       (let ((init-db (not (file-exists-p roam-block-db-location))))
@@ -132,6 +132,13 @@ If DB is nil, closes the database connection for nil."
   "Return the file that blocks belongs to in database by UUID."
   (caar (roam-block-db-query `[:select file :from blocks
                                        :where (= uuid ,uuid)])))
+
+(defun roam-block-db--linked-ref-data (ref)
+  "Return the query data that block linked references needed by
+searching the block REF in database."
+  (roam-block-db-query `[:select [file content uuid] :from blocks
+                                 :where (like content
+                                              ,(concat "%" ref "%"))]))
 
 ;; Cache blocks
 
@@ -203,7 +210,7 @@ the uuid list in database with UUID-LST list."
 
 (defun roam-block-db-cache-file ()
   "Store current buffer's blocks in database."
-  (when (roam-block-work-on)
+  (when (roam-block-work-home)
     (let (uuid-lst)
       (unless (roam-block-db--have-file)
         (roam-block-db--init-files-table))
