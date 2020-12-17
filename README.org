@@ -5,63 +5,69 @@
   - [[#license][License]]
 
 ** Introduction
- Roam-block is an all-purpose block references and block embed implement in emacs.
+   Roam-block is an all-purpose block references and block embed implement in emacs.
 
 ** Installation
 
- Firstly, install the dependencies:
+   Firstly, install the dependencies:
 
- - [[https://www.sqlite.org/index.html][sqlite3]] cli
- - [[https://github.com/skeeto/emacsql][emacsql]] package
- - [[https://github.com/cireu/emacsql-sqlite3][emacsql-sqlite3]] package
+   - [[https://www.sqlite.org/index.html][sqlite3]] cli
+   - [[https://github.com/skeeto/emacsql][emacsql]] package
+   - [[https://github.com/cireu/emacsql-sqlite3][emacsql-sqlite3]] package
 
- Then, clone roam-block repo to your local directory and add the following codes to your emacs configuration:
+   Then, clone roam-block repo to your local directory and add the following codes to your emacs configuration:
 
- #+BEGIN_SRC emacs-lisp
- (add-to-list 'load-path "path/to/roam-block/")
- (require 'roam-block)
- (setq roam-block-home '("~/roam-block/")
-       roam-block-ref-highlight nil)
- (roam-block-mode 1)
- (define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-ref-store)
- (define-key roam-block-mode-map (kbd "C-c b i") #'roam-block-ref-insert)
- (define-key roam-block-mode-map (kbd "C-c b e") #'roam-block-ref-edit)
- (define-key roam-block-mode-map (kbd "C-c b d") #'roam-block-ref-delete)
- #+END_SRC
+   #+BEGIN_SRC emacs-lisp
+   (add-to-list 'load-path "path/to/roam-block/")
+   (require 'roam-block)
+   (setq roam-block-home '("~/roam-block/")
+         roam-block-ref-highlight nil)
+   (roam-block-mode 1)
+   (define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-ref-store)
+   (define-key roam-block-mode-map (kbd "C-c b i") #'roam-block-ref-insert)
+   (define-key roam-block-mode-map (kbd "C-c b e") #'roam-block-ref-edit)
+   (define-key roam-block-mode-map (kbd "C-c b d") #'roam-block-ref-delete)
+   (define-key roam-block-mode-map (kbd "C-c b t") #'roam-block-ref-highlight-toggle)
+   #+END_SRC
 
- If you prefer 'use-package', use the following codes:
+   If you prefer =use-package=, use the following codes:
 
- #+BEGIN_SRC emacs-lisp
- (use-package roam-block
-   :load-path "path/to/roam-block/"
-   :hook (after-init . roam-block-mode)
-   :init (setq roam-block-home '("~/roam-block/")
-               roam-block-ref-highlight nil)
-   :bind
-   (:map roam-block-mode-map
-         (("C-c b s" . roam-block-ref-store)
-          ("C-c b i" . roam-block-ref-insert)
-          ("C-c b e" . roam-block-ref-edit)
-          ("C-c b d" . roam-block-ref-delete))))
- #+END_SRC
+   #+BEGIN_SRC emacs-lisp
+   (use-package roam-block
+     :load-path "path/to/roam-block/"
+     :hook (after-init . roam-block-mode)
+     :init (setq roam-block-home '("~/roam-block/")
+                 roam-block-ref-highlight nil)
+     :bind
+     (:map roam-block-mode-map
+           (("C-c b s" . roam-block-ref-store)
+            ("C-c b i" . roam-block-ref-insert)
+            ("C-c b e" . roam-block-ref-edit)
+            ("C-c b d" . roam-block-ref-delete)
+            ("C-c b t" . roam-block-ref-highlight-toggle))))
+   #+END_SRC
 
 ** Usage
  
-   =roam-block-ref-store= ::
+   =roam-block-ref-store=
 
    Store the ref of current block or blocks in an active region.
 
-   =roam-block-ref-insert= ::
+   =roam-block-ref-insert=
 
    Insert the ref at where you want to refer the blocks.
    
-   =roam-block-ref-edit= ::
+   =roam-block-ref-edit=
    
    By default, the block ref is read only. Use this command to edit the displayed content in an edit buffer.
 
-   =roam-block-ref-delete= ::
+   =roam-block-ref-delete=
 
    Delete the read only block ref at point or close to current point.
+
+   =roam-block-ref-highlight-toggle=
+
+   Highlight block ref display or not.
 
 ** License
    Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].

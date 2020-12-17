@@ -49,6 +49,9 @@
   "Non-nil means to highlight the refered block display and
 distinguish it with the original block.")
 
+(defvar roam-block-ref-face 'italic
+  "Faces to highlight roam block ref.")
+
 (defvar roam-block-stored-ref nil
   "Roam block ref that have stored.")
 
@@ -136,7 +139,8 @@ distinguish it with the original block.")
                (propertized-content
                 (when content
                   (if roam-block-ref-highlight
-                      (propertize content 'face '(:underline "#aaa"))
+                      (propertize content 'face
+                                  roam-block-ref-face)
                     content))))
           (if content
               (with-silent-modifications
