@@ -223,8 +223,13 @@ file and cache them database."
   (when (roam-block-work-home)
     (unless (roam-block-restore-properties)
       (roam-block-db-cache-file))
-    (roam-block-ref-fontify (point-min) (point-max))
     (roam-block--buffer-setting)))
+
+(defun roam-block-window-buffer-change-function (frame)
+  (let* ((win (frame-selected-window frame)))
+    (select-window win)
+    (when (roam-block-work-on)
+      (roam-block-ref-fontify (point-min) (point-max)))))
 
 (defun roam-block--after-save-hook-function ()
   "Roam-block function binded to `after-save-hook'.
@@ -257,10 +262,12 @@ Please make sure it is installed and can be found within `exec-path'."))
         (roam-block-db)
         (jit-lock-register #'roam-block-ref-fontify)
         (add-hook 'find-file-hook #'roam-block--find-file-hook-function)
+        (add-hook 'window-buffer-change-functions #'roam-block-window-buffer-change-function)
         (add-hook 'after-save-hook #'roam-block--after-save-hook-function)
         (add-hook 'kill-emacs-hook #'roam-block-db--close-all))
     (jit-lock-unregister #'roam-block-ref-fontify)
     (remove-hook 'find-file-hook #'roam-block--find-file-hook-function)
+    (remove-hook 'window-buffer-change-functions #'roam-block-window-buffer-change-function)
     (remove-hook 'after-save-hook #'roam-block--after-save-hook-function)
     (remove-hook 'kill-emacs-hook #'roam-block-db--close-all)
     (save-excursion

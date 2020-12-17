@@ -78,7 +78,7 @@ distinguish it with the original block.")
   "Jump to block references buffer after follow roam-block ref link."
   (with-demoted-errors "Error when following the link: %s"
     (let* ((content (button-get button 'content))
-           (ref (string-trim (button-label button) "((" "))"))
+           (uuid (string-trim (button-label button) "((" "))"))
            (data (roam-block-db--linked-ref-data uuid))
            (num (length data))
            (groups (seq-group-by #'car data)))
@@ -148,27 +148,25 @@ distinguish it with the original block.")
             (with-silent-modifications
               (remove-text-properties beg end '(display nil read-only nil face nil)))))))))
 
-(defun roam-block-ref-fontify-ref (uuid)
-  "Highlight block ref in all files which are opened and include UUID ref."
-  ;; Useful when is able to know the specific uuid block changed.
-  ;; Such as finish editing a block ref with specific uuid in edit buffer.
-  ;; FIXME: 'diff' to know the specific uuid block changed.
-  (let ((files (roam-block-db--ref-files uuid))
-        (ref (format "((%s))" uuid)))
-    (dolist (file files)
-      (when-let ((buf (find-buffer-visiting file)))
-        (with-current-buffer buf
-          (save-excursion
-            (goto-char (point-min))
-            (when (search-forward ref nil t)
-              (let ((inhibit-read-only t))
-                (roam-block-ref-fontify (match-beginning 0) (match-end 0))))))))))
+;; (defun roam-block-ref-fontify-ref (uuid)
+;;   "Highlight block ref in all files which are opened and include UUID ref."
+;;   ;; Useful when is able to know the specific uuid block changed.
+;;   ;; Such as finish editing a block ref with specific uuid in edit buffer.
+;;   ;; FIXME: 'diff' to know the specific uuid block changed.
+;;   (let ((files (roam-block-db--ref-files uuid))
+;;         (ref (format "((%s))" uuid)))
+;;     (dolist (file files)
+;;       (when-let ((buf (find-buffer-visiting file)))
+;;         (with-current-buffer buf
+;;           (save-excursion
+;;             (goto-char (point-min))
+;;             (when (search-forward ref nil t)
+;;               (let ((inhibit-read-only t))
+;;                 (roam-block-ref-fontify (match-beginning 0) (match-end 0))))))))))
 
 (defun roam-block-ref-fontify-all (&optional uuid)
   "Highlight roam-block ref in all current frame's windows.
 If UUID is non-nil, highlight all refs with this uuid."
-  (when uuid
-    (roam-block-ref-fontify-ref uuid))
   ;; fontify current buffer
   (roam-block-ref-fontify (point-min) (point-max))
   ;; fontify all displayed windows
@@ -229,7 +227,7 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
               (save-buffer)
               (throw 'break nil))))))
     (switch-to-buffer (get-file-buffer file))
-    (roam-block-ref-fontify-ref uuid)
+    ;; (roam-block-ref-fontify-ref uuid)
     (kill-buffer roam-block-ref-edit-buf)))
 
 ;;;###autoload
@@ -311,6 +309,18 @@ If a region is active, copy all blocks' ref links that the region contains."
     (let ((inhibit-read-only t))
       (remove-text-properties beg end '(read-only nil))
       (delete-region beg end))))
+
+;;;###autoload
+(defun roam-block-ref-highlight-toggle ()
+  "Determine whether to highlight block refs."
+  (interactive)
+  (if roam-block-ref-highlight
+      (setq roam-block-ref-highlight nil)
+    (setq roam-block-ref-highlight t))
+  (roam-block-ref-fontify-all)
+  (if roam-block-ref-highlight
+      (message "(roam-block) Show block refs highlight")
+    (message "(roam-block) Hide block refs highlight")))
 
 (provide 'roam-block-ref)
 ;;; roam-block-ref.el ends here
