@@ -132,12 +132,23 @@ If DB is nil, closes the database connection for nil."
   (caar (roam-block-db-query `[:select file :from blocks
                                        :where (= uuid ,uuid)])))
 
-(defun roam-block-db--linked-ref-data (ref)
+(defun roam-block-db--linked-ref-data (uuid)
   "Return the query data that block linked references needed by
 searching the block REF in database."
-  (roam-block-db-query `[:select [file content uuid] :from blocks
-                                 :where (like content
-                                              ,(concat "%" ref "%"))]))
+  (let ((ref (format "((%s))" uuid)))
+    (roam-block-db-query `[:select [file content uuid] :from blocks
+                                   :where
+                                   (like content
+                                         ,(concat "%" ref "%"))])))
+
+(defun roam-block-db--ref-files (uuid)
+  "Return a list of block's files that includes UUID ref in content."
+  (let ((ref (format "((%s))" uuid)))
+    (mapcar #'car (roam-block-db-query
+                   `[:select file :from blocks
+                             :where
+                             (like content
+                                   ,(concat "%" ref "%"))]))))
 
 ;; Cache blocks
 
