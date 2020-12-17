@@ -49,7 +49,7 @@
   "Non-nil means to highlight the refered block display and
 distinguish it with the original block.")
 
-(defvar roam-block-ref-face 'italic
+(defvar roam-block-ref-face 'bold-italic
   "Faces to highlight roam block ref.")
 
 (defvar roam-block-stored-ref nil
