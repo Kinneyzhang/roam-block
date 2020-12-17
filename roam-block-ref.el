@@ -106,6 +106,21 @@ distinguish it with the original block.")
         (setq-local header-line-format "View Buffer: Press 'q' to quit."))
       (view-buffer roam-block-ref-buf))))
 
+(defun roam-block-ref-inherit-display (content)
+  "Inherit all the block refs' display in the CONTENT."
+  (let ((start 0))
+    (while (and content
+                (string-match roam-block-ref-re content start))
+      (let* ((data (match-data))
+             (beg (match-beginning 0))
+             (uuid (match-string 1 content))
+             (display (unwind-protect
+                          (roam-block-db--block-content uuid)
+                        (set-match-data data))))
+        (setq content (replace-match display t t content))
+        (setq start beg)))
+    content))
+
 (defun roam-block-ref-fontify (beg end)
   "Highlight roam-block ref between BEG and END."
   (when (roam-block-work-on)
@@ -115,7 +130,9 @@ distinguish it with the original block.")
         (let* ((uuid (match-string-no-properties 1))
                (beg (match-beginning 0))
                (end (match-end 0))
-               (content (roam-block-db--block-content uuid))
+               (content
+                (roam-block-ref-inherit-display
+                 (roam-block-db--block-content uuid)))
                (propertized-content
                 (when content
                   (if roam-block-ref-highlight
@@ -180,11 +197,12 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
         (goto-char (point-min))
         (catch 'break
           (while (search-forward origin-content nil t)
-            (message "found the same content!")
+            ;; (message "found the same content!")
             (when (string= uuid (get-char-property
                                  (line-beginning-position) 'uuid))
-              (message "found the original uuid one!")
-              (replace-match content)
+              ;; (message "found the original uuid one!")
+              (let ((inhibit-read-only t))
+                (replace-match content))
               (let ((beg (match-beginning 0))
                     (len (length content)))
                 (roam-block-propertize-block beg (+ beg len) uuid))
@@ -194,7 +212,8 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
     (save-excursion
       (goto-char (point-min))
       (search-forward (format "((%s))" uuid) nil t)
-      (roam-block-ref-fontify (match-beginning 0) (match-end 0)))
+      (let ((inhibit-read-only t))
+        (roam-block-ref-fontify (match-beginning 0) (match-end 0))))
     (kill-buffer roam-block-ref-edit-buf)))
 
 ;;;###autoload
