@@ -44,8 +44,8 @@
 ;;;; Utility Functions
 
 (defun roam-block--get-uuid ()
-  "Format a downcase uuid."
-  (string-join (split-string (org-id-uuid) "-") ""))
+  "Return a uuid."
+  (org-id-uuid))
 
 (defun roam-block--narrow-to-content ()
   "Narrow region to file contents."

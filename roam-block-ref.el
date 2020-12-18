@@ -36,7 +36,7 @@
 
 ;;;; Variables
 
-(defvar roam-block-ref-re "((\\([a-z0-9]\\{32\\}\\)))"
+(defvar roam-block-ref-re "((\\([-a-z0-9]\\{36\\}\\)))"
   "Regular expression that matches a `roam-block-link'.")
 
 (defvar roam-block-ref-buf "*Roam Block Ref*"
