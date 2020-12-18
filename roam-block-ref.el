@@ -109,7 +109,7 @@ distinguish it with the original block.")
         (setq-local header-line-format "View Buffer: Press 'q' to quit."))
       (view-buffer roam-block-ref-buf))))
 
-(defun roam-block-ref-inherit-display (content)
+(defun roam-block-ref--inherit-display (content)
   "Inherit all the block refs' display in the CONTENT."
   (let ((start 0))
     (while (and content
@@ -124,6 +124,43 @@ distinguish it with the original block.")
         (setq start beg)))
     content))
 
+(defun roam-block-ref--org-link-preserve (content)
+  "Preserve the org-link face for org links in CONTENT."
+  (let ((start 0))
+    (while (string-match (org-link-make-regexps) content start)
+      (let ((beg (match-beginning 0)))
+        ;; org-link-make-regexps also match the pure link.
+        ;; here we only expect org link.
+        (if (string= (substring content beg (1+ beg)) "[")
+            (let* ((display (or (match-string 3 content)
+                                (match-string 2 content)))
+                   (propertized-display
+                    (propertize display 'face 'org-link))
+                   (len (length propertized-display))
+                   (end (+ len beg)))
+              (setq content (replace-match propertized-display t nil content))
+              (setq start end))
+          (setq start (match-end 0)))))
+    content))
+
+(defun roam-block-ref--highlight-display (content)
+  "Return the highlighted CONTENT with face `roam-block-ref-face'
+except the region with org-link face."
+  (if (text-property-any 0 (length content)
+                         'face 'org-link content)
+      (with-temp-buffer
+        (insert content)
+        (goto-char (point-min))
+        (let (match)
+          (while (setq match (text-property-search-forward
+                              'face 'org-link nil))
+            (add-text-properties
+             (prop-match-beginning match)
+             (prop-match-end match)
+             `(face ,roam-block-ref-face)))
+          (buffer-string)))
+    (propertize content 'face roam-block-ref-face)))
+
 (defun roam-block-ref-fontify (beg end)
   "Highlight roam-block ref between BEG and END."
   (when (roam-block-work-on)
@@ -133,24 +170,25 @@ distinguish it with the original block.")
         (let* ((uuid (match-string-no-properties 1))
                (beg (match-beginning 0))
                (end (match-end 0))
+               (db-content (roam-block-db--block-content uuid))
                (content
-                (roam-block-ref-inherit-display
-                 (roam-block-db--block-content uuid)))
+                (when db-content
+                  (roam-block-ref--org-link-preserve
+                   (roam-block-ref--inherit-display db-content))))
                (propertized-content
                 (when content
                   (if roam-block-ref-highlight
-                      (propertize content 'face
-                                  roam-block-ref-face)
+                      (roam-block-ref--highlight-display content)
                     content))))
           (if content
               (with-silent-modifications
-                (add-text-properties beg end
-                                     `(display ,propertized-content
-                                               read-only t))
-                (make-text-button beg end :type 'roam-block-ref
-                                  'content content))
+                (add-text-properties
+                 beg end `(display ,propertized-content read-only t))
+                (make-text-button
+                 beg end :type 'roam-block-ref 'content content))
             (with-silent-modifications
-              (remove-text-properties beg end '(display nil read-only nil face nil)))))))))
+              (remove-text-properties
+               beg end '(display nil read-only nil face nil)))))))))
 
 ;; (defun roam-block-ref-fontify-ref (uuid)
 ;;   "Highlight block ref in all files which are opened and include UUID ref."
@@ -219,10 +257,8 @@ to finish, `\\[roam-block-ref--edit-abort]' to abort."))
         (goto-char (point-min))
         (catch 'break
           (while (search-forward origin-content nil t)
-            ;; (message "found the same content!")
             (when (string= uuid (get-char-property
                                  (line-beginning-position) 'uuid))
-              ;; (message "found the original uuid one!")
               (let ((inhibit-read-only t))
                 (replace-match content))
               (let ((beg (match-beginning 0))
