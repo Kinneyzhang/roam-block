@@ -35,6 +35,7 @@
 (require 'cl-lib)
 (require 'org-id)
 (require 'seq)
+(require 'ov)
 
 ;;;; Declarations
 
@@ -47,6 +48,10 @@
   "Return a uuid."
   (org-id-uuid))
 
+;; (defun roam-block--org-title ()
+;;   "Return the org file title."
+;;   )
+
 (defun roam-block--narrow-to-content ()
   "Narrow region to file contents."
   (save-excursion
@@ -57,14 +62,21 @@
         (setq content-beg (point)))
       (narrow-to-region content-beg content-end))))
 
-(defun roam-block--block-end ()
-  "Return the end point of current block."
-  (let ((match (text-property-search-forward 'uuid)))
-    (prop-match-end match)))
-
 (defun roam-block--block-uuid ()
-  "Return the uuid of current block."
-  (get-char-property (line-beginning-position) 'uuid))
+  "Return the (uuid beg end) structure of current block."
+  (let* (uuid-data)
+    (if-let* ((ov (ov-at))
+              (uuid (ov-val ov 'uuid))
+              (beg (ov-beg ov))
+              (end (ov-end ov)))
+        (setq uuid-data `(,uuid ,beg ,end))
+      (if-let* ((ov (ov-at (1- (point))))
+                (uuid (ov-val ov 'uuid))
+                (beg (ov-beg ov))
+                (end (ov-end ov)))
+          (setq uuid-data `(,uuid ,beg ,end))
+        (setq uuid-data nil)))
+    uuid-data))
 
 (defun roam-block--ref-uuid ()
   "Return the (uuid (beg . end)) structure from block ref
@@ -89,6 +101,14 @@
           (end (match-end 0)))
       `(,uuid ,beg ,end)))))
 
+(defun roam-block-check-sqlite3 ()
+  "Check if the necessary command line 'sqlite3' is avaliable."
+  (unless (or (and (bound-and-true-p emacsql-sqlite3-executable)
+                   (file-executable-p emacsql-sqlite3-executable))
+              (executable-find "sqlite3"))
+    (lwarn '(roam-block) :error "Cannot find executable 'sqlite3'. \
+Please make sure it is installed and can be found within `exec-path'.")))
+
 (defun roam-block-check-home ()
   "Check the value of `roam-block-home' variable.
 If the value is nil, throw a user error message.
@@ -110,21 +130,22 @@ Return the value of 'roam-block-home'."
 (defun roam-block-work-home (&optional file)
   "Return the home directory or file in `roam-block-home' 
 that FILE belongs to.  If FILE is nil, use current buffer file."
-  (let ((file (or file (buffer-file-name)))
-        (home (roam-block-check-home))
-        in-home)
-    (when file
-      (if-let ((match (cl-member file home :test #'file-equal-p)))
-          (setq in-home (car match))
-        ;; file belongs to directory/sub-directory in home.
-        (catch 'found
-          (dolist (home-file home)
-            (when (file-directory-p home-file)
-              (when (file-in-directory-p file home-file)
-                (setq in-home home-file)
-                (throw 'found nil))))))
-      (when in-home
-        (expand-file-name in-home)))))
+  (when-let
+      ((file (or file (buffer-file-name)))
+       (home (roam-block-check-home)))
+    (let (in-home)
+      (when file
+        (if-let ((match (cl-member file home :test #'file-equal-p)))
+            (setq in-home (car match))
+          ;; file belongs to directory/sub-directory in home.
+          (catch 'found
+            (dolist (home-file home)
+              (when (file-directory-p home-file)
+                (when (file-in-directory-p file home-file)
+                  (setq in-home home-file)
+                  (throw 'found nil))))))
+        (when in-home
+          (expand-file-name in-home))))))
 
 (defun roam-block-work-on ()
   "Judge if `roam-block-mode' can work on current buffer."
@@ -146,4 +167,3 @@ that FILE belongs to.  If FILE is nil, use current buffer file."
 
 (provide 'roam-block-util)
 ;;; roam-block-util.el ends here
-

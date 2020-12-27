@@ -36,7 +36,7 @@
 (require 'org-element)
 
 (require 'roam-block-ref)
-;; (require 'roam-block-embed)
+(require 'roam-block-embed)
 
 ;;;; Variables
 
@@ -59,105 +59,86 @@ In Windows, the directory separator character is '\\'."
   "Regular expression that matches contents needed to be skipped
 at the beginning of file, usually are some meta settings.")
 
+(defvar-local roam-block-linum nil)
+
+(defvar-local roam-block-ovs nil)
+
 ;;;; Functions
 
-(defun roam-block-insert-in-front (beg end)
-  "Function added to `insert-in-front-hooks'.
-BEG is the start position of inserted text.
-END is the end position of inserted text.
-This functiton reset the uuid propery region to BEG and block end."
-  (let* ((match (save-excursion (text-property-search-forward 'uuid)))
-         (match-end (prop-match-end match))
-         (uuid (prop-match-value match)))
-    (let ((inhibit-read-only t))
-      (add-text-properties (line-beginning-position) match-end
-                           `(uuid ,uuid
-                                  insert-in-front-hooks
-                                  (roam-block-insert-in-front)
-                                  insert-behind-hooks
-                                  (roam-block-insert-behind))))))
+(defun roam-block-insert-in-front (ov after &rest args)
+  "Move overlays when insert in front of a OV overlay.
+ When AFTER is non-nil, call function after change,
+ otherwise call function before change. ARGS are the rest arguments."
+  (if (null after)
+      (setq roam-block-linum (line-number-at-pos))
+    (unless (= roam-block-linum (line-number-at-pos))
+      (ov-move ov (line-beginning-position) (ov-end ov)))))
 
-(defun roam-block-insert-behind (beg end) 
-  "Function added to `insert-behind-hooks'.
-BEG is the start position of inserted text.
-END is the end position of inserted text.
-This functiton reset the uuid propery region to BEG and block end."
-  (let* ((match (save-excursion (text-property-search-backward 'uuid)))
-         (match-beg (prop-match-beginning match))
-         (uuid (prop-match-value match))
-         (inserted-str (buffer-substring-no-properties beg end)))
-    (cond
-     ((string= inserted-str "\n")
-      (set-text-properties beg end nil))
-     (t (let ((inhibit-read-only t))
-          (add-text-properties match-beg (line-end-position)
-                               `(uuid ,uuid
-                                      insert-in-front-hooks
-                                      (roam-block-insert-in-front)
-                                      insert-behind-hooks
-                                      (roam-block-insert-behind))))))))
-
-(defun roam-block-propertize-block (beg end &optional uuid prop value)
-  "Put uuid propery between BEG and END. If UUID is non-nil, 
-use it as the value of uuid property.  
-If PROP and VALUE is non-nil, also add the property on this block."
+(defun roam-block-overlay-block (beg end &optional uuid prop value)
+  "Put uuid overlay between BEG and END. If UUID is non-nil, 
+use it as the value of uuid overlay.  
+If PROP and VALUE is non-nil, also add the overlay on this block."
   (let ((uuid (or uuid (roam-block--get-uuid)))
-        (inhibit-read-only t))
-    (add-text-properties beg end `(uuid ,uuid
-                                        insert-in-front-hooks
-                                        (roam-block-insert-in-front)
-                                        insert-behind-hooks
-                                        (roam-block-insert-behind)))
-    (when (and prop value)
-      (add-text-properties beg end `(,prop ,value)))
+        (inhibit-read-only t)
+        (ov (ov-make beg end nil nil t)))
+    (push ov roam-block-ovs)
+    (ov-set ov 'uuid uuid)
+    (ov-set ov 'evaporate t)
+    (ov-set ov 'insert-in-front-hooks
+            '(roam-block-insert-in-front))
+    (when (and prop value) (ov-set ov prop value))
     uuid))
 
-(defun roam-block-restore-properties ()
-  "Restore uuid properties from database in the file."
+(defun roam-block-restore-overlays ()
+  "Restore uuid overlays from database in the file."
   (when (roam-block-work-home)
     (when-let ((regions (roam-block-db--have-regions)))
-      (dolist (region regions)
-        (when-let* ((beg (car region))
-                    (end (cdr region))
-                    (content (buffer-substring-no-properties beg end))
-                    ;; FIXME: If the two blocks have the same content,
-                    ;; it doesn't make sense that choose the first one.
-                    (uuid (caar (roam-block-db-query
-                                 `[:select uuid :from blocks
-                                           :where (= content ,content)]))))
-          (roam-block-propertize-block beg end uuid))))))
+      (progn
+        (dolist (region regions)
+          (when-let*
+              ((beg (car region))
+               (end (cdr region))
+               (uuid (caar (roam-block-db-query
+                            `[:select uuid :from blocks
+                                      :where
+                                      (and (= begin ,beg)
+                                           (= file ,(buffer-file-name)))]))))
+            (roam-block-overlay-block beg end uuid)))
+        ;; If the file have region in database to restore
+        ;; overlays, return t. Otherwise return nil.
+        t))))
 
-(defun roam-block-propertize-buffer ()
-  "Put uuid property to the whole buffer's valid blocks 
+(defun roam-block-overlay-buffer ()
+  "Put uuid overlay to the whole buffer's valid blocks 
 according to the major mode MODE."
   (pcase major-mode
-    ('org-mode (roam-block-propertize-org-buffer))))
+    ('org-mode (roam-block-overlay-org-buffer))))
 
-(defun roam-block-block-property-update (block-beg block-end)
-  "Update current block's uuid property.
+(defun roam-block-block-overlay-update (block-beg block-end)
+  "Update current block's uuid overlay.
 
-If there's no uuid property on current block, add it and return the uuid.
-If there's uuid property, compare the property range with block range.
+If there's no uuid overlay on current block, add it and return the uuid.
+If there's uuid overlay, compare the overlay range with block range.
 
-If the two are equal, return the uuid. Otherwise, set property range to
+If the two are equal, return the uuid. Otherwise, set overlay range to
 the new block range and return the uuid.
 
 BLOCK-BEG is the beginning of the block. BLOCK-END is the end of the block."
-  (let ((uuid (get-char-property (point) 'uuid))
-        match match-end)
-    (if uuid
-        (progn
-          (setq match (save-excursion
-                        (text-property-search-forward 'uuid)))
-          (setq match-end (prop-match-end match))
-          (unless (= match-end block-end)
-            ;; Make sure all lines in this paragraph are propertized
-            (roam-block-propertize-block block-beg block-end uuid)))
-      (setq uuid (roam-block-propertize-block block-beg block-end)))
-    uuid))
+  (if-let* ((ov (ov-at))
+            (uuid (ov-val ov 'uuid))
+            (beg (ov-beg ov))
+            (end (ov-end ov)))
+      (progn
+        (unless (and (= beg block-beg) (= end block-end))
+          (ov-reset ov)
+          (roam-block-overlay-block block-beg block-end uuid))
+        uuid)
+    (let ((uuid (roam-block--get-uuid)))
+      (roam-block-overlay-block block-beg block-end uuid)
+      uuid)))
 
-(defun roam-block-propertize-org-buffer ()
-  "Put uuid property to current org buffer's valid blocks."
+(defun roam-block-overlay-org-buffer ()
+  "Put uuid overlay to current org buffer's valid blocks."
   (save-excursion
     (save-restriction
       (roam-block--narrow-to-content)
@@ -181,7 +162,7 @@ BLOCK-BEG is the beginning of the block. BLOCK-END is the end of the block."
                       (end (org-element-property :contents-end elem))
                       (block-end (1- end))
                       (content (buffer-substring-no-properties beg block-end))
-                      (uuid (roam-block-block-property-update beg block-end)))
+                      (uuid (roam-block-block-overlay-update beg block-end)))
                  ;; FIXME: consider the condition of the last line, do
                  ;; not need to minus 1 from end.
                  (roam-block-db--block-update uuid content)
@@ -194,7 +175,7 @@ BLOCK-BEG is the beginning of the block. BLOCK-END is the end of the block."
                       (end (car (last tree)))
                       (block-end (1- end))
                       (content (buffer-substring-no-properties beg block-end))
-                      (uuid (roam-block-block-property-update beg block-end)))
+                      (uuid (roam-block-block-overlay-update beg block-end)))
                  (roam-block-db--block-update uuid content)
                  (push uuid uuid-lst)
                  (goto-char end)))
@@ -203,7 +184,7 @@ BLOCK-BEG is the beginning of the block. BLOCK-END is the end of the block."
                         (blank (org-element-property :post-blank elem))
                         (block-end (- end blank 1))
                         (content (buffer-substring-no-properties beg block-end))
-                        (uuid (roam-block-block-property-update beg block-end)))
+                        (uuid (roam-block-block-overlay-update beg block-end)))
                    (roam-block-db--block-update uuid content)
                    (push uuid uuid-lst)
                    (goto-char end))))))
@@ -217,29 +198,24 @@ BLOCK-BEG is the beginning of the block. BLOCK-END is the end of the block."
 
 (defun roam-block--find-file-hook-function ()
   "Roam-block function binded to `find-file-hook'.
-If there exists caches of the file, restore properties of the file buffer.
-If there doesn't exist caches of the file, add properties for each block in
+If there exists caches of the file, restore overlays of the file buffer.
+If there doesn't exist caches of the file, add overlays for each block in
 file and cache them database."
   (when (roam-block-work-home)
-    (unless (roam-block-restore-properties)
+    (unless (roam-block-restore-overlays)
       (roam-block-db-cache-file))
+    (roam-block-embed-sync-from-db)
+    (roam-block-ref-fontify-all)
     (roam-block--buffer-setting)))
-
-(defun roam-block-window-buffer-change-function (frame)
-  (let* ((win (frame-selected-window frame)))
-    (select-window win)
-    (when (roam-block-work-on)
-      (roam-block-ref-fontify (point-min) (point-max)))))
 
 (defun roam-block--after-save-hook-function ()
   "Roam-block function binded to `after-save-hook'.
 Update caches of those changed blocks and fontify block ref links."
   ;; FIXME: Cannot work properly in markdown-mode.
   ;; After the md buffer is saved, the display attribute
-  ;; of text properties will lost.
+  ;; of overlays will lost.
   (when (roam-block-work-home)
     (roam-block-db-cache-file)
-    ;; (roam-block-embed-sync)
     (roam-block-ref-fontify-all)
     (roam-block--buffer-setting)))
 
@@ -254,30 +230,37 @@ Update caches of those changed blocks and fontify block ref links."
   :global t
   (if roam-block-mode
       (progn
-        (unless (or (and (bound-and-true-p emacsql-sqlite3-executable)
-                         (file-executable-p emacsql-sqlite3-executable))
-                    (executable-find "sqlite3"))
-          (lwarn '(roam-block) :error "Cannot find executable 'sqlite3'. \
-Please make sure it is installed and can be found within `exec-path'."))
+        (roam-block-check-sqlite3)
         (roam-block-db)
         (jit-lock-register #'roam-block-ref-fontify)
+        (roam-block-ref-fontify-all)
         (add-hook 'find-file-hook #'roam-block--find-file-hook-function)
-        (add-hook 'window-buffer-change-functions #'roam-block-window-buffer-change-function)
+        (add-hook 'post-command-hook #'roam-block-embed-sync-at-real-time)
         (add-hook 'after-save-hook #'roam-block--after-save-hook-function)
         (add-hook 'kill-emacs-hook #'roam-block-db--close-all))
     (jit-lock-unregister #'roam-block-ref-fontify)
     (remove-hook 'find-file-hook #'roam-block--find-file-hook-function)
-    (remove-hook 'window-buffer-change-functions #'roam-block-window-buffer-change-function)
+    (remove-hook 'post-command-hook #'roam-block-embed-sync-at-real-time)
     (remove-hook 'after-save-hook #'roam-block--after-save-hook-function)
     (remove-hook 'kill-emacs-hook #'roam-block-db--close-all)
-    (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward roam-block-ref-re nil t)
-        (with-silent-modifications
-          (let ((inhibit-read-only t))
-            (remove-text-properties (match-beginning 0) (match-end 0)
-                                    '(display nil read-only nil)))))))
+    (roam-block-ref-remove-properties))
   (jit-lock-refontify))
+
+;; Commands
+
+;;;###autoload
+(defun roam-block-delete-block ()
+  "Delete current block.  If there's no block at point, 
+prompt a message."
+  (interactive)
+  (let ((data (roam-block--block-uuid))
+        beg end)
+    (if data
+        (progn
+          (setq beg (nth 1 data))
+          (setq end (nth 2 data))
+          (delete-region beg end))
+      (message "(roam-block) No valid block here!"))))
 
 (provide 'roam-block)
 ;;; roam-block.el ends here

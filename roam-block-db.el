@@ -32,6 +32,7 @@
 
 ;;;; Requires
 
+(require 'promise)
 (require 'emacsql)
 (require 'emacsql-sqlite3)
 
@@ -51,9 +52,11 @@
      [(path :primary-key)
       (regions)])
     (blocks
-     [(uuid :not-null)
+     [(uuid :primary-key)
+      (embed-id :not-null)
+      (embedp :not-null)
+      (begin :not-null)
       (content :not-null)
-      (type :not-null)
       (file :not-null)]
      (:foreign-key [file] :references files [path] :on-delete :cascade)))
   "Table schemata of block-re-db.")
@@ -122,6 +125,66 @@ If DB is nil, closes the database connection for nil."
     (dolist (key keys)
       (remhash key roam-block-db--connection))))
 
+(defun roam-block-db--group-by-car (data)
+  "Group database query result by first element."
+  (let ((data (seq-group-by #'car data)))
+    (mapcar (lambda (file-block)
+              (append
+               (list (car file-block))
+               (mapcar
+                (lambda (uuid)
+                  (cadr uuid))
+                (cdr file-block))))
+            data)))
+
+(defun roam-block-db--embed-id (uuid)
+  "Return the block embed-id in database by UUID."
+  (promise-new
+   (lambda (resolve _reject)
+     (let ((embed-id (caar (roam-block-db-query
+                            `[:select embed-id :from blocks
+                                      :where (= uuid ,uuid)]))))
+       (funcall resolve embed-id)))))
+
+(defun roam-block-db--embed-blocks (embed-id)
+  "Return a list of '(file . uuid)' data for 
+all blocks with the same EMBED-ID."
+  (promise-new
+   (lambda (resolve reject)
+     (let* ((data (roam-block-db-query
+                   `[:select [file uuid] :from blocks
+                             :where (= embed-id ,embed-id)]))
+            (data (roam-block-db--group-by-car data)))
+       (if data
+           (funcall resolve data)
+         (funcall reject (format "no blocks have embed-id %s"
+                                 embed-id)))))))
+
+(defun roam-block-db--embed-block-uuid (embed-id)
+  "Return a list of uuid for all blocks with the same EMBED-ID."
+  (promise-new
+   (lambda (resolve _reject)
+     (funcall
+      resolve
+      (roam-block-db-query
+       `[:select uuid :from blocks
+                 :where (= embed-id ,embed-id)])))))
+
+(defun roam-block-db--block-embedp (uuid)
+  "Return the value of 'embedp' field of block with uuid UUID."
+  (promise-new
+   (lambda (resolve _reject)
+     (funcall
+      resolve
+      (caar (roam-block-db-query `[:select embedp :from blocks
+                                           :where (= uuid ,uuid)]))))))
+
+(defun roam-block-db--all-embedp ()
+  "Return a list of embedp blocks' uuid group by file."
+  (let* ((data (roam-block-db-query [:select [file uuid] :from blocks
+                                             :where (= embedp 1)])))
+    (roam-block-db--group-by-car data)))
+
 (defun roam-block-db--block-content (uuid)
   "Return block content in database by UUID."
   (caar (roam-block-db-query `[:select content :from blocks
@@ -133,22 +196,24 @@ If DB is nil, closes the database connection for nil."
                                        :where (= uuid ,uuid)])))
 
 (defun roam-block-db--linked-ref-data (uuid)
-  "Return the query data that block linked references needed by
-searching the block REF in database."
+  "Return the query data that block content with a specific UUID block ref."
   (let ((ref (format "((%s))" uuid)))
     (roam-block-db-query `[:select [file content uuid] :from blocks
                                    :where
                                    (like content
                                          ,(concat "%" ref "%"))])))
 
-(defun roam-block-db--ref-files (uuid)
-  "Return a list of block's files that includes UUID ref in content."
-  (let ((ref (format "((%s))" uuid)))
-    (mapcar #'car (roam-block-db-query
-                   `[:select file :from blocks
-                             :where
-                             (like content
-                                   ,(concat "%" ref "%"))]))))
+;; (defun roam-block-db--ref-files (uuid)
+;;   "Return a list of block's files that includes UUID ref in content."
+;;   (promise-new
+;;    (lambda (resolve _reject)
+;;      (let ((ref (format "((%s))" uuid)))
+;;        (funcall resolve
+;;                 (mapcar #'car (roam-block-db-query
+;;                                `[:select file :from blocks
+;;                                          :where
+;;                                          (like content
+;;                                                ,(concat "%" ref "%"))])))))))
 
 ;; Cache blocks
 
@@ -156,21 +221,30 @@ searching the block REF in database."
   "Insert the block cache in database if there doesn't exist.
 Update the block cache if there exists in database and has
 changes in file. Otherwise, do nothing."
-  (let ((file (buffer-file-name)))
-    (if-let ((cached-content
-              (caar (roam-block-db-query
-                     `[:select content :from blocks
-                               :where (= uuid ,uuid)]))))
-        (unless (string= cached-content content)
-          (roam-block-db-query
-           `[:update blocks :set (= content ,content)
-                     :where (= uuid ,uuid)]))
+  (let ((file (buffer-file-name))
+        (beg (point)))
+    (if-let* ((res (car (roam-block-db-query
+                         `[:select [embed-id begin content] :from blocks
+                                   :where (= uuid ,uuid)])))
+              (embed-id (nth 0 res))
+              (begin (nth 1 res))
+              (cached-content (nth 2 res)))
+        (progn
+          (unless (= begin beg)
+            (roam-block-db-query
+             `[:update blocks :set (= begin ,beg)
+                       :where (= uuid ,uuid)]))
+          (unless (string= cached-content content)
+            (roam-block-db-query
+             `[:update blocks :set (= content ,content)
+                       :where (= embed-id ,embed-id)])))
       (roam-block-db-query `[:insert :into blocks
-                                     :values ([,uuid ,content "origin" ,file])]))))
+                                     :values
+                                     ([,uuid ,uuid 0 ,beg ,content ,file])]))))
 
 (defun roam-block-db--have-regions ()
-  "Judge if current buffer has properties caches.
-Return the uuid property region (beg . end) list."
+  "Judge if current buffer has overlay caches.
+Return the uuid overlay region (beg . end) list."
   (let ((file (buffer-file-name)))
     (caar (roam-block-db-query `[:select regions :from files
                                          :where (= path ,file)]))))
@@ -194,11 +268,12 @@ for safety of foreign key constrain."
     (goto-char (point-min))
     (let ((print-length nil)
           ;; Do not limit the length of list to print.
-          region-lst match)
-      (while (setq match (text-property-search-forward 'uuid))
-        (push (cons (prop-match-beginning match) (prop-match-end match))
-              region-lst))
-      (setq region-lst (reverse region-lst))
+          (region-lst (delete-dups
+                       (reverse
+                        (mapcar
+                         (lambda (ov)
+                           (cons (ov-beg ov) (ov-end ov)))
+                         (ov-in 'uuid))))))
       (when (roam-block-db--have-file)
         (roam-block-db-query
          `[:update files :set (= regions ',region-lst)
@@ -227,7 +302,7 @@ the uuid list in database with UUID-LST list."
     (let (uuid-lst)
       (unless (roam-block-db--have-file)
         (roam-block-db--init-files-table))
-      (setq uuid-lst (roam-block-propertize-buffer))
+      (setq uuid-lst (roam-block-overlay-buffer))
       (roam-block-db--update-block-region)
       (roam-block-db--delete-redundant-blocks uuid-lst))))
 
