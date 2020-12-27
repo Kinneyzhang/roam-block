@@ -6,7 +6,7 @@
 ;; Keywords: block roam convenience
 ;; Author: Kinney Zhang <kinneyzhang666@gmail.com>
 ;; URL: https://github.com/Kinneyzhang/roam-block
-;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2"))
+;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (ov "1.0.6"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -84,7 +84,6 @@ for buffers at live window list."
            (content (buffer-substring-no-properties beg end))
            (embedp-promise (roam-block-db--block-embedp uuid))
            (embed-id-promise (roam-block-db--embed-id uuid)))
-        (roam-block-ref-fontify-at-real-time uuid content)
         (promise-then
          embedp-promise
          (lambda (embedp)
@@ -106,7 +105,9 @@ for buffers at live window list."
                                buf block-uuid content)))))
                       data)))
                   (promise-catch (lambda (reason)
-                                   (message reason)))))))))))))
+                                   (message reason)))))))))
+        ;; (roam-block-ref-fontify-at-real-time uuid content)
+        ))))
 
 (defun roam-block-embed-sync-from-db ()
   "Synchronize all blocks with embed-id by content in database."

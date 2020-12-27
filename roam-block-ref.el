@@ -6,7 +6,7 @@
 ;; Keywords: block roam convenience
 ;; Author: Kinney Zhang <kinneyzhang666@gmail.com>
 ;; URL: https://github.com/Kinneyzhang/roam-block
-;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2"))
+;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (ov "1.0.6"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -54,18 +54,6 @@ distinguish it with the original block.")
 
 (defvar roam-block-ref-stored nil
   "Roam block ref that have stored.")
-
-(defvar-local roam-block-ref-uuid nil
-  "The uuid of block in edit buffer.")
-
-(defvar-local roam-block-ref-content nil
-  "The origin content of block in edite buffer.")
-
-(defvar-local roam-block-ref-in-file nil
-  "The file that the uuid link belongs to.")
-
-(defvar-local roam-block-ref-original-file nil
-  "The origin file of the edited uuid block.")
 
 ;;;; Functions
 
@@ -190,41 +178,45 @@ except the region with org-link face."
               (remove-text-properties
                beg end '(display nil read-only nil face nil)))))))))
 
-(defun roam-block-ref-fontify-at-real-time (uuid content)
-  "Change the display property of UUID block ref to CONTENT at real time
-when the original block or embed blocks change."
-  (promise-then
-   (roam-block-db--embed-id uuid)
-   (lambda (embed-id)
-     (promise-then
-      (roam-block-db--embed-block-uuid embed-id)
-      (lambda (uuids)
-        ;; (message "uuids: %S" uuids)
-        ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ;; Strange: block with embed blocks and block without!!
-        ;; embed blocks share different UUIDS value!         !!
-        ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        (dolist (win (window-list))
-          ;; It's better to loop in window list than files list
-          ;; because windows in window list are less than files
-          ;; with the same UUID block ref usually.
-          (when-let* ((buf (window-buffer win))
-                      (file (buffer-file-name buf))
-                      (_ (roam-block-work-home file))
-                      (uuids (mapcar #'cadr uuids)))
-            (with-current-buffer buf
-              ;; (message "buf, uuids: %S, %S" buf uuids)
-              (dolist (uuid uuids)
-                (let ((ref (format "((%s))" uuid)))
-                  (save-excursion
-                    (goto-char (point-min))
-                    (while (search-forward ref nil t)
-                      (let ((inhibit-read-only t)
-                            (beg (match-beginning 0))
-                            (end (match-end 0)))
-                        (with-silent-modifications
-                          (add-text-properties
-                           beg end `(display ,content))))))))))))))))
+;; (defun roam-block-ref-fontify-at-real-time (uuid content)
+;;   "Change the display property of UUID block ref to CONTENT at real time
+;; when the original block or embed blocks change."
+;;   (promise-then
+;;    (roam-block-db--block-content-promise uuid)
+;;    (lambda (db-content)
+;;      (unless (string= content db-content)
+;;        (promise-then
+;;         (roam-block-db--embed-id uuid)
+;;         (lambda (embed-id)
+;;           (promise-then
+;;            (roam-block-db--embed-block-uuid embed-id)
+;;            (lambda (uuids)
+;;              ;; (message "uuids: %S" uuids)
+;;              ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+;;              ;; Strange: block with embed blocks and block without!!
+;;              ;; embed blocks share different UUIDS value!         !!
+;;              ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+;;              (dolist (win (window-list))
+;;                ;; It's better to loop in window list than files list
+;;                ;; because windows in window list are less than files
+;;                ;; with the same UUID block ref usually.
+;;                (when-let* ((buf (window-buffer win))
+;;                            (file (buffer-file-name buf))
+;;                            (_ (roam-block-work-home file))
+;;                            (uuids (mapcar #'cadr uuids)))
+;;                  (with-current-buffer buf
+;;                    ;; (message "buf, uuids: %S, %S" buf uuids)
+;;                    (dolist (uuid uuids)
+;;                      (let ((ref (format "((%s))" uuid)))
+;;                        (save-excursion
+;;                          (goto-char (point-min))
+;;                          (while (search-forward ref nil t)
+;;                            (let ((inhibit-read-only t)
+;;                                  (beg (match-beginning 0))
+;;                                  (end (match-end 0)))
+;;                              (with-silent-modifications
+;;                                (add-text-properties
+;;                                 beg end `(display ,content)))))))))))))))))))
 
 (defun roam-block-ref-fontify-all (&optional uuid)
   "Highlight roam-block ref in all current frame's windows.
@@ -254,56 +246,6 @@ If UUID is non-nil, highlight all refs with this uuid."
                 (remove-text-properties
                  (match-beginning 0) (match-end 0)
                  '(display nil read-only nil))))))))))
-
-;; Edit block
-
-(define-minor-mode roam-block-ref-edit-mode
-  "Minor mode for editing a refered read only block."
-  :lighter ""
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-c C-k") #'roam-block-ref--edit-abort)
-            (define-key map (kbd "C-c C-c") #'roam-block-ref--edit-finalize)
-            map)
-  :require 'roam-block
-  (if roam-block-ref-edit-mode
-      (setq-local header-line-format
-                  (substitute-command-keys
-                   "\\<roam-block-ref-edit-mode-map>Edit block: `\\[roam-block-ref--edit-finalize]' \
-to finish, `\\[roam-block-ref--edit-abort]' to abort."))
-    (setq-local header-line-format nil))
-  (setq truncate-lines nil))
-
-(defun roam-block-ref--edit-abort ()
-  "Abort editing the read only block content."
-  (interactive)
-  (switch-to-buffer (get-file-buffer roam-block-ref-in-file))
-  (kill-buffer roam-block-ref-edit-buf))
-
-(defun roam-block-ref--edit-finalize ()
-  "Finish editing the read only block content."
-  (interactive)
-  (let* ((file roam-block-ref-in-file)
-         (origin-file roam-block-ref-original-file)
-         (uuid roam-block-ref-uuid)
-         (ref (format "((%s))" uuid))
-         (origin-content roam-block-ref-content)
-         (content (buffer-substring-no-properties (point-min) (point-max))))
-    (with-current-buffer (find-file-noselect origin-file)
-      (save-excursion
-        (goto-char (point-min))
-        (catch 'break
-          (while (search-forward origin-content nil t)
-            (when (string= uuid (get-char-property
-                                 (line-beginning-position) 'uuid))
-              (let ((inhibit-read-only t))
-                (replace-match content t))
-              (let ((beg (match-beginning 0))
-                    (len (length content)))
-                (roam-block-overlay-block beg (+ beg len) uuid))
-              (save-buffer)
-              (throw 'break nil))))))
-    (switch-to-buffer (get-file-buffer file))
-    (kill-buffer roam-block-ref-edit-buf)))
 
 ;;;###autoload
 (defun roam-block-ref-store ()
@@ -351,28 +293,6 @@ If a region is active, copy all blocks' ref links that the region contains."
     (roam-block-ref-fontify beg end)))
 
 ;;;###autoload
-(defun roam-block-ref-edit ()
-  "Edit the content of the ref block."
-  (interactive)
-  (let* ((file (buffer-file-name))
-         (uuid (car (roam-block--ref-uuid)))
-         (origin-file (roam-block-db--block-file uuid))
-         (content (roam-block-db--block-content uuid))
-         (mode major-mode))
-    (if uuid
-        (with-current-buffer (get-buffer-create roam-block-ref-edit-buf)
-          (erase-buffer)
-          (insert content)
-          (funcall mode)
-          (setq roam-block-ref-in-file file)
-          (setq roam-block-ref-original-file origin-file)
-          (setq roam-block-ref-uuid uuid)
-          (setq roam-block-ref-content content)
-          (roam-block-ref-edit-mode)
-          (switch-to-buffer roam-block-ref-edit-buf))
-      (message "(roam-block) No block ref here!"))))
-
-;;;###autoload
 (defun roam-block-ref-delete ()
   "Delete the roam-block ref at point."
   (interactive)
@@ -395,6 +315,90 @@ If a region is active, copy all blocks' ref links that the region contains."
   (if roam-block-ref-highlight
       (message "(roam-block) Show block refs highlight")
     (message "(roam-block) Hide block refs highlight")))
+
+;; Edit block
+
+;; (defvar-local roam-block-ref-uuid nil
+;;   "The uuid of block in edit buffer.")
+
+;; (defvar-local roam-block-ref-content nil
+;;   "The origin content of block in edite buffer.")
+
+;; (defvar-local roam-block-ref-in-file nil
+;;   "The file that the uuid link belongs to.")
+
+;; (defvar-local roam-block-ref-original-file nil
+;;   "The origin file of the edited uuid block.")
+
+;; (define-minor-mode roam-block-ref-edit-mode
+;;   "Minor mode for editing a refered read only block."
+;;   :lighter ""
+;;   :keymap (let ((map (make-sparse-keymap)))
+;;             (define-key map (kbd "C-c C-k") #'roam-block-ref--edit-abort)
+;;             (define-key map (kbd "C-c C-c") #'roam-block-ref--edit-finalize)
+;;             map)
+;;   :require 'roam-block
+;;   (if roam-block-ref-edit-mode
+;;       (setq-local header-line-format
+;;                   (substitute-command-keys
+;;                    "\\<roam-block-ref-edit-mode-map>Edit block: `\\[roam-block-ref--edit-finalize]' \
+;; to finish, `\\[roam-block-ref--edit-abort]' to abort."))
+;;     (setq-local header-line-format nil))
+;;   (setq truncate-lines nil))
+
+;; (defun roam-block-ref--edit-abort ()
+;;   "Abort editing the read only block content."
+;;   (interactive)
+;;   (switch-to-buffer (get-file-buffer roam-block-ref-in-file))
+;;   (kill-buffer roam-block-ref-edit-buf))
+
+;; (defun roam-block-ref--edit-finalize ()
+;;   "Finish editing the read only block content."
+;;   (interactive)
+;;   (let* ((file roam-block-ref-in-file)
+;;          (origin-file roam-block-ref-original-file)
+;;          (uuid roam-block-ref-uuid)
+;;          (ref (format "((%s))" uuid))
+;;          (origin-content roam-block-ref-content)
+;;          (content (buffer-substring-no-properties (point-min) (point-max))))
+;;     (with-current-buffer (find-file-noselect origin-file)
+;;       (save-excursion
+;;         (goto-char (point-min))
+;;         (catch 'break
+;;           (while (search-forward origin-content nil t)
+;;             (when (string= uuid (get-char-property
+;;                                  (line-beginning-position) 'uuid))
+;;               (let ((inhibit-read-only t))
+;;                 (replace-match content t))
+;;               (let ((beg (match-beginning 0))
+;;                     (len (length content)))
+;;                 (roam-block-overlay-block beg (+ beg len) uuid))
+;;               (save-buffer)
+;;               (throw 'break nil))))))
+;;     (switch-to-buffer (get-file-buffer file))
+;;     (kill-buffer roam-block-ref-edit-buf)))
+
+;; ;;;###autoload
+;; (defun roam-block-ref-edit ()
+;;   "Edit the content of the ref block."
+;;   (interactive)
+;;   (let* ((file (buffer-file-name))
+;;          (uuid (car (roam-block--ref-uuid)))
+;;          (origin-file (roam-block-db--block-file uuid))
+;;          (content (roam-block-db--block-content uuid))
+;;          (mode major-mode))
+;;     (if uuid
+;;         (with-current-buffer (get-buffer-create roam-block-ref-edit-buf)
+;;           (erase-buffer)
+;;           (insert content)
+;;           (funcall mode)
+;;           (setq roam-block-ref-in-file file)
+;;           (setq roam-block-ref-original-file origin-file)
+;;           (setq roam-block-ref-uuid uuid)
+;;           (setq roam-block-ref-content content)
+;;           (roam-block-ref-edit-mode)
+;;           (switch-to-buffer roam-block-ref-edit-buf))
+;;       (message "(roam-block) No block ref here!"))))
 
 (provide 'roam-block-ref)
 ;;; roam-block-ref.el ends here

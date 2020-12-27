@@ -6,7 +6,7 @@
 ;; Keywords: block roam convenience
 ;; Author: Kinney Zhang <kinneyzhang666@gmail.com>
 ;; URL: https://github.com/Kinneyzhang/roam-block
-;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2"))
+;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (ov "1.0.6"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -189,6 +189,15 @@ all blocks with the same EMBED-ID."
   "Return block content in database by UUID."
   (caar (roam-block-db-query `[:select content :from blocks
                                        :where (= uuid ,uuid)])))
+
+(defun roam-block-db--block-content-promise (uuid)
+  "Return block content in database by UUID."
+  (promise-new
+   (lambda (resolve _reject)
+     (funcall
+      resolve
+      (caar (roam-block-db-query `[:select content :from blocks
+                                           :where (= uuid ,uuid)]))))))
 
 (defun roam-block-db--block-file (uuid)
   "Return the file that blocks belongs to in database by UUID."
