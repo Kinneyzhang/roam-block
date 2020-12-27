@@ -5,13 +5,20 @@
   - [[#license][License]]
 
 ** Introduction
-   Roam-block is an all-purpose block references and block embed implement in emacs.
+   Block-ref and block-embed are two concepts in [[https://roamresearch.com][Roam Research]]. With the two functionalities, users can easily refer or include one block in another block or page. Roam-block has implemented these in emacs.
+   
+   What's the differences between block-ref and block-embed? Block-ref means a reference refers to a block, while block-embed embed one block in any place. When you change the content of the original block, both of the block-ref and block-embed content could be synchronized. But, there're some differences.
+
+   For block-ref, you cannot change the content of it because it's actually a reference literally. This feature suits the situation where you don't want to change the block content any where but refer to the original one.
+
+   For block-embed, you can change the content of any embed blocks and all the blocks which are derived from one original block will be synchronized.
 
 ** Installation
 
    Firstly, install the dependencies:
 
    - [[https://www.sqlite.org/index.html][sqlite3]] cli
+   - [[https://github.com/emacsorphanage/ov][ov]] package
    - [[https://github.com/skeeto/emacsql][emacsql]] package
    - [[https://github.com/cireu/emacsql-sqlite3][emacsql-sqlite3]] package
 
@@ -23,11 +30,12 @@
    (setq roam-block-home '("~/roam-block/")
          roam-block-ref-highlight nil)
    (roam-block-mode 1)
-   (define-key roam-block-mode-map (kbd "C-c b c") #'roam-block-ref-store)
-   (define-key roam-block-mode-map (kbd "C-c b i") #'roam-block-ref-insert)
-   (define-key roam-block-mode-map (kbd "C-c b e") #'roam-block-ref-edit)
-   (define-key roam-block-mode-map (kbd "C-c b d") #'roam-block-ref-delete)
-   (define-key roam-block-mode-map (kbd "C-c b t") #'roam-block-ref-highlight-toggle)
+   (define-key roam-block-mode-map (kbd "C-c b r c") #'roam-block-ref-store)
+   (define-key roam-block-mode-map (kbd "C-c b r i") #'roam-block-ref-insert)
+   (define-key roam-block-mode-map (kbd "C-c b r d") #'roam-block-ref-delete)
+   (define-key roam-block-mode-map (kbd "C-c b r t") #'roam-block-ref-highlight-toggle)
+   (define-key roam-block-mode-map (kbd "C-c b e c") #'roam-block-embed-store)
+   (define-key roam-block-mode-map (kbd "C-c b e i") #'roam-block-embed-insert)
    #+END_SRC
 
    If you prefer =use-package=, use the following codes:
@@ -37,38 +45,36 @@
      :load-path "path/to/roam-block/"
      :hook (after-init . roam-block-mode)
      :init (setq roam-block-home '("~/roam-block/")
-                 roam-block-ref-highlight nil)
+                 roam-block-ref-highlight t)
      :bind
      (:map roam-block-mode-map
-           (("C-c b s" . roam-block-ref-store)
-            ("C-c b i" . roam-block-ref-insert)
-            ("C-c b e" . roam-block-ref-edit)
-            ("C-c b d" . roam-block-ref-delete)
-            ("C-c b t" . roam-block-ref-highlight-toggle))))
+           (("C-c b r s" . roam-block-ref-store)
+            ("C-c b r i" . roam-block-ref-insert)
+            ("C-c b r d" . roam-block-ref-delete)
+            ("C-c b r t" . roam-block-ref-highlight-toggle)
+            ("C-c b e s" . roam-block-embed-store)
+            ("C-c b e i" . roam-block-embed-insert))))
    #+END_SRC
 
 ** Usage
  
-   =roam-block-ref-store=
-
+   =roam-block-ref-store=\\
    Store the ref of current block or blocks in an active region.
 
-   =roam-block-ref-insert=
-
+   =roam-block-ref-insert=\\
    Insert the ref at where you want to refer the blocks.
-   
-   =roam-block-ref-edit=
-   
-   By default, the block ref is read only. Use this command to edit the displayed content in an edit buffer.
 
-   =roam-block-ref-delete=
-
+   =roam-block-ref-delete=\\
    Delete the read only block ref at point or close to current point.
 
-   =roam-block-ref-highlight-toggle=
-
+   =roam-block-ref-highlight-toggle=\\
    Highlight block ref display or not.
+
+   =roam-block-embed-store=\\
+   Store the embed block of current block.
+
+   =roam-block-embed-insert=\\
+   Insert the embed block at point.
 
 ** License
    Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].
-

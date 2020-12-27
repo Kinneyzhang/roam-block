@@ -36,7 +36,7 @@
 
 ;;;; Declarations
 
-(declare-function roam-block-ref-fontify-at-real-time "roam-block-ref")
+;; (declare-function roam-block-ref-fontify-at-real-time "roam-block-ref")
 
 ;;;; Variables
 
