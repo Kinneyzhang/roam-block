@@ -80,12 +80,14 @@ distinguish it with the original block.")
           (erase-buffer))
         (org-mode)
         (insert (propertize content 'font-lock-face
-                            '(italic (:height 1.2))) "\n\n")
-        (insert (format "* %d Linked References\n\n" num))
+                            '((:height 1.1))) "\n\n")
+        (insert (format "* %d Block References\n\n" num))
         (dolist (group groups)
           (let ((file (car group))
                 (items (cdr group)))
-            (insert (format "** [[file:%s][%s]]\n\n" file file))
+            (if-let ((title (roam-block--org-title file)))
+                (insert (format "** [[file:%s][%s]]\n\n" file title))
+              (insert (format "** [[file:%s][%s]]\n\n" file file)))
             (dolist (item items)
               (let ((content (nth 1 item))
                     (uuid (nth 2 item)))
@@ -317,6 +319,20 @@ If a region is active, copy all blocks' ref links that the region contains."
   (if roam-block-ref-highlight
       (message "(roam-block) Show block refs highlight")
     (message "(roam-block) Hide block refs highlight")))
+
+;; completion
+
+;; (add-hook 'completion-at-point-functions #')
+
+;; (defun roam-block-in-double-parens-p ()
+;;   "Judge whether the cursor is between double parens."
+;;   )
+
+;; (defun roam-block-ref-completion-at-point ()
+;;   "Function to complete block ref at point."
+;;   (save-excursion))
+
+;; hello(())ioevcio
 
 ;; Edit block
 

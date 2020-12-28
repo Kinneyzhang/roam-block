@@ -202,11 +202,13 @@ If there exists caches of the file, restore overlays of the file buffer.
 If there doesn't exist caches of the file, add overlays for each block in
 file and cache them database."
   (when (roam-block-work-home)
+    (roam-block--buffer-setting)
     (unless (roam-block-restore-overlays)
       (roam-block-db-cache-file))
     (roam-block-embed-sync-from-db)
     (roam-block-ref-fontify-all)
-    (roam-block--buffer-setting)))
+    (when roam-block-embed-highlight
+      (roam-block-embed-overlay))))
 
 (defun roam-block--after-save-hook-function ()
   "Roam-block function binded to `after-save-hook'.
@@ -215,9 +217,9 @@ Update caches of those changed blocks and fontify block ref links."
   ;; After the md buffer is saved, the display attribute
   ;; of overlays will lost.
   (when (roam-block-work-home)
+    (roam-block--buffer-setting)
     (roam-block-db-cache-file)
-    (roam-block-ref-fontify-all)
-    (roam-block--buffer-setting)))
+    (roam-block-ref-fontify-all)))
 
 ;; Minor mode
 

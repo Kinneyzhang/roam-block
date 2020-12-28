@@ -46,12 +46,16 @@
 (defvar roam-block-embed-content nil
   "The content of block that will be inserted as a embed block.")
 
-(defvar roam-block-embed-face nil
-  "Faces to highlight those embed blocks.")
+(defface roam-block-embed-face
+  '((t :inherit hl-line))
+  "Face for embed blocks.")
 
 (defvar roam-block-embed-highlight nil
   "Non-nil means to highlight the embed block and
 distinguish it with the original block.")
+
+(defvar roam-block-embed-ovs nil
+  "The list of overlays for embed blocks.")
 
 ;;;; Functions
 
@@ -160,7 +164,7 @@ use the block at point by default."
           (setq end (point))
           (if roam-block-embed-highlight
               (roam-block-overlay-block
-               beg end uuid 'font-lock-face roam-block-embed-face)
+               beg end uuid 'face 'roam-block-embed-face)
             (roam-block-overlay-block beg end uuid))
           ;; FIXME: It's fine to update the original block only.
           (roam-block-db-query
@@ -173,15 +177,63 @@ use the block at point by default."
        "(roam-block) The embed block should be insert \
 at the beginning of line!"))))
 
-;; ;;;###autoload
-;; (defun roam-block-embed-highlight-toggle ()
-;;   "Determine whether to highlight the embed blocks."
-;;   (interactive)
-;;   (if roam-block-embed-highlight
-;;       (setq roam-block-embed-highlight nil)
-;;     (setq roam-block-embed-highlight t))
-;;   (if roam-block-embed-highlight
-;;       ))
+(defun roam-block-embed--uuids ()
+  "Return the embed blocks' uuid grouped by file, 
+except the original block."
+  (let ((data (roam-block-db--all-embedp)))
+    data))
+
+(defun roam-block-embed-overlay ()
+  "Highlight all embed blocks for live buffers."
+  (let ((data (roam-block-embed--uuids)))
+    (setq roam-block-embed-ovs nil)
+    (dolist (file-uuids data)
+      (let ((file (car file-uuids))
+            (uuids (cdr file-uuids)))
+        (when-let* ((buf (find-buffer-visiting file)))
+          (dolist (uuid uuids)
+            (let ((embed-id-promise (roam-block-db--embed-id uuid)))
+              (promise-then
+               embed-id-promise
+               (lambda (embed-id)
+                 (unless (string= uuid embed-id)
+                   (with-current-buffer buf
+                     (when uuid
+                       (let* ((ov (car (ov-in 'uuid uuid)))
+                              (beg (ov-beg ov))
+                              (end (ov-end ov))
+                              (content (buffer-substring beg end)))
+                         (ov-set ov 'face 'roam-block-embed-face
+                                 'line-prefix
+                                 (propertize
+                                  "▏" 'face 'roam-block-embed-margin-face)
+                                 'wrap-prefix
+                                 (propertize
+                                  "▏" 'face 'roam-block-embed-margin-face))
+                         (push ov roam-block-embed-ovs))))))))))))))
+
+(defface roam-block-embed-margin-face
+  '((t :inherit fringe))
+  "Face for embed block left margin.")
+
+;; need to overlay embed blocks when first open a file!
+
+;;;###autoload
+(defun roam-block-embed-highlight-toggle ()
+  "Determine whether to highlight the embed blocks."
+  (interactive)
+  (if roam-block-embed-highlight
+      (setq roam-block-embed-highlight nil)
+    (setq roam-block-embed-highlight t))
+  (if roam-block-embed-highlight
+      (progn
+        (roam-block-embed-overlay)
+        (message "(roam-block) Show embed blocks highlight"))
+    (mapcar (lambda (ov)
+              (ov-set ov 'face nil 'line-prefix nil 'wrap-prefix nil))
+            roam-block-embed-ovs)
+    (setq roam-block-embed-ovs nil)
+    (message "(roam-block) Hide embed blocks highlight")))
 
 (provide 'roam-block-embed)
 ;;; roam-block-embed.el ends here

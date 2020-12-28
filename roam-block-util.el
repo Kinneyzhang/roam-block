@@ -48,9 +48,16 @@
   "Return a uuid."
   (org-id-uuid))
 
-;; (defun roam-block--org-title ()
-;;   "Return the org file title."
-;;   )
+(defun roam-block--org-title (&optional file)
+  "Return the current org file's title. 
+If FILE is non-nil, consider it as current file."
+  (let* ((file (or file (buffer-file-name)))
+         (buf (or (find-file-noselect file))))
+    (with-current-buffer buf
+      (save-excursion
+        (goto-char (point-min))
+        (when (re-search-forward "^ *#\\+TITLE: *\\(.+\\)" nil t)
+          (match-string-no-properties 1))))))
 
 (defun roam-block--narrow-to-content ()
   "Narrow region to file contents."
@@ -147,9 +154,10 @@ that FILE belongs to.  If FILE is nil, use current buffer file."
         (when in-home
           (expand-file-name in-home))))))
 
-(defun roam-block-work-on ()
-  "Judge if `roam-block-mode' can work on current buffer."
-  (or (string= (buffer-name) roam-block-ref-buf)
+(defun roam-block-work-on (&optional buffer)
+  "Judge if `roam-block-mode' can work on current buffer.
+If BUFFER is non-nil, consider it as current buffer."
+  (or (string= (buffer-name buffer) roam-block-ref-buf)
       (roam-block-work-home)))
 
 (defun roam-block--duplicate-uuids (seq)
