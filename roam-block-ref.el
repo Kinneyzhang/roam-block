@@ -49,7 +49,7 @@
   "Non-nil means to highlight the refered block display and
 distinguish it with the original block.")
 
-(defvar roam-block-ref-face 'bold-italic
+(defvar roam-block-ref-face '(:underline (:color "#666"))
   "Faces to highlight roam block ref.")
 
 (defvar roam-block-ref-stored nil
@@ -166,7 +166,9 @@ except the region with org-link face."
                (propertized-content
                 (when content
                   (if roam-block-ref-highlight
-                      (roam-block-ref--highlight-display content)
+                      (concat (propertize " " 'face '(:height 0.9)
+                                          'display '(raise 0.1))
+                              (roam-block-ref--highlight-display content))
                     content))))
           (if content
               (with-silent-modifications
