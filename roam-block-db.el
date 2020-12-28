@@ -137,6 +137,25 @@ If DB is nil, closes the database connection for nil."
                 (cdr file-block))))
             data)))
 
+(defun roam-block-db--all-contents ()
+  "Return a list of (content . uuid) for all blocks."
+  (promise-new
+   (lambda (resolve _reject)
+     (funcall resolve
+              (roam-block-db-query
+               [:select [content uuid] :from blocks])))))
+
+(defun roam-block-db--content-uuid (content)
+  "Return the uuid of block whose content is CONTENT."
+  (promise-new
+   (lambda (resolve reject)
+     (let ((uuid (caar (roam-block-db-query
+                        `[:select uuid :from blocks
+                                  :where (= content ,content)]))))
+       (if uuid
+           (funcall resolve uuid)
+         (funcall reject "(roam-block-db) Query database failed!"))))))
+
 (defun roam-block-db--embed-id (uuid)
   "Return the block embed-id in database by UUID."
   (promise-new

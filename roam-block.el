@@ -239,11 +239,15 @@ Update caches of those changed blocks and fontify block ref links."
         (add-hook 'find-file-hook #'roam-block--find-file-hook-function)
         (add-hook 'post-command-hook #'roam-block-embed-sync-at-real-time)
         (add-hook 'after-save-hook #'roam-block--after-save-hook-function)
+        (add-hook 'completion-at-point-functions
+                  #'roam-block-ref-completion-at-point nil 'local)
         (add-hook 'kill-emacs-hook #'roam-block-db--close-all))
     (jit-lock-unregister #'roam-block-ref-fontify)
     (remove-hook 'find-file-hook #'roam-block--find-file-hook-function)
     (remove-hook 'post-command-hook #'roam-block-embed-sync-at-real-time)
     (remove-hook 'after-save-hook #'roam-block--after-save-hook-function)
+    (remove-hook 'completion-at-point-functions
+                 #'roam-block-ref-completion-at-point 'local)
     (remove-hook 'kill-emacs-hook #'roam-block-db--close-all)
     (roam-block-ref-remove-properties))
   (jit-lock-refontify))

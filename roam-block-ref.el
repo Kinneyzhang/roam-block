@@ -55,6 +55,9 @@ distinguish it with the original block.")
 (defvar roam-block-ref-stored nil
   "Roam block ref that have stored.")
 
+(defvar roam-block-contents nil
+  "A list of all block contents")
+
 ;;;; Functions
 
 (define-button-type 'roam-block-ref
@@ -322,17 +325,56 @@ If a region is active, copy all blocks' ref links that the region contains."
 
 ;; completion
 
-;; (add-hook 'completion-at-point-functions #')
+(defun roam-block-blocks-contents ()
+  (let ((promise (roam-block-db--all-contents)))
+    (promise-then
+     promise
+     (lambda (data)
+       (setq roam-block-contents (mapcar #'car data))))
+    roam-block-contents))
 
-;; (defun roam-block-in-double-parens-p ()
-;;   "Judge whether the cursor is between double parens."
-;;   )
+(defun roam-block-ref-completion-at-point ()
+  "Function to complete block ref at point."
+  (interactive)
+  (when (roam-block-work-home)
+    (when (and (save-excursion
+                 (re-search-backward
+                  "(("  (line-beginning-position) t))
+               (save-excursion
+                 (re-search-forward
+                  "))" (line-end-position) t)))
+      (let (beg end)
+        (save-excursion
+          (goto-char (line-beginning-position))
+          (when (re-search-forward "((\\(.+\\)))" (line-end-position) t)
+            (setq beg (match-beginning 1))
+            (setq end (match-end 1))))
+        `(,beg ,end ,(roam-block-blocks-contents)
+               :exit-function
+               ,#'roam-block-ref-completion-exit-function)))))
 
-;; (defun roam-block-ref-completion-at-point ()
-;;   "Function to complete block ref at point."
-;;   (save-excursion))
+(defun roam-block-ref-completion-exit-function (string status)
+  "Function to run after completion is performed.
+STRING is the text to which the field was completed, 
+and STATUS indicates what kind of operation happened:
 
-;; hello(())ioevcio
+‘finished’ - text is now complete
+‘sole’     - text cannot be further completed but
+             completion is not finished
+‘exact’    - text is a valid completion but may be further
+             completed."
+  (when (eq status 'finished)
+    (promise-chain (roam-block-db--content-uuid string)
+      (then
+       (lambda (uuid)
+         ;; (message "uuid:%s" uuid)
+         ;; FIXME: 'roam-block-db--content-uuid' cannot  get the
+         ;; value uuid stablely. It may be a bug of emacsql!
+         (save-excursion
+           (when (search-backward string (line-beginning-position) t)
+             (replace-match uuid t)))))
+      (promise-catch (lambda (reason)
+                       (message reason))))))
 
 ;; Edit block
 
