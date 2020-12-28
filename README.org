@@ -1,5 +1,6 @@
 * Table of Contents :TOC_3:
   - [[#introduction][Introduction]]
+  - [[#demos][Demos]]
   - [[#installation][Installation]]
   - [[#usage][Usage]]
   - [[#license][License]]
@@ -13,6 +14,16 @@
 
    For block-embed, you can change the content of any embed blocks and all the blocks which are derived from one original block will be synchronized.
 
+** Demos
+
+   *block-ref*
+
+   [[./demos/roam-block-embed.gif]]
+
+   *block-embed*
+   
+   [[./demos/roam-block-embed.gif]]
+   
 ** Installation
 
    Firstly, install the dependencies:
@@ -36,6 +47,8 @@
    (define-key roam-block-mode-map (kbd "C-c b r t") #'roam-block-ref-highlight-toggle)
    (define-key roam-block-mode-map (kbd "C-c b e c") #'roam-block-embed-store)
    (define-key roam-block-mode-map (kbd "C-c b e i") #'roam-block-embed-insert)
+   (define-key roam-block-mode-map (kbd "C-c b e t") #'roam-block-embed-highlight-toggle)
+   (define-key roam-block-mode-map (kbd "C-c b d") #'roam-block-delete-block)
    #+END_SRC
 
    If you prefer =use-package=, use the following codes:
@@ -45,7 +58,8 @@
      :load-path "path/to/roam-block/"
      :hook (after-init . roam-block-mode)
      :init (setq roam-block-home '("~/roam-block/")
-                 roam-block-ref-highlight t)
+                 roam-block-ref-highlight t
+                 roam-block-embed-highlight t)
      :bind
      (:map roam-block-mode-map
            (("C-c b r s" . roam-block-ref-store)
@@ -53,7 +67,9 @@
             ("C-c b r d" . roam-block-ref-delete)
             ("C-c b r t" . roam-block-ref-highlight-toggle)
             ("C-c b e s" . roam-block-embed-store)
-            ("C-c b e i" . roam-block-embed-insert))))
+            ("C-c b e i" . roam-block-embed-insert)
+            ("C-c b e t" . roam-block-embed-highlight-toggle)
+            ("C-c b d" . roam-block-delete-block))))
    #+END_SRC
 
 ** Usage
@@ -75,6 +91,12 @@
 
    =roam-block-embed-insert=\\
    Insert the embed block at point.
+
+   =roam-block-embed-highlight-toggle=\\
+   Highlight embed blocks or not.
+
+   =roam-block-delete-block=\\
+   Delete block at point.
 
 ** License
    Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].
