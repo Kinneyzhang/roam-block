@@ -50,6 +50,10 @@
   '((t :inherit hl-line))
   "Face for embed blocks.")
 
+(defface roam-block-embed-margin-face
+  '((t :inherit fringe))
+  "Face for embed block left margin.")
+
 (defvar roam-block-embed-highlight nil
   "Non-nil means to highlight the embed block and
 distinguish it with the original block.")
@@ -163,9 +167,11 @@ use the block at point by default."
           (insert content)
           (setq end (point))
           (if roam-block-embed-highlight
-              (roam-block-overlay-block
-               beg end uuid 'face 'roam-block-embed-face)
-            (roam-block-overlay-block beg end uuid))
+              (progn
+                (roam-block-overlay-block
+                 beg end uuid)
+                (roam-block-embed-overlay-block uuid))
+            (roam-block-overlay-block beg end uuid))   
           ;; FIXME: It's fine to update the original block only.
           (roam-block-db-query
            `[:update blocks :set (= embedp 1)
@@ -183,6 +189,21 @@ except the original block."
   (let ((data (roam-block-db--all-embedp)))
     data))
 
+(defun roam-block-embed-overlay-block (uuid)
+  "Highlight the embed block with uuid UUID."
+  (let* ((ov (car (ov-in 'uuid uuid)))
+         (beg (ov-beg ov))
+         (end (ov-end ov))
+         (content (buffer-substring beg end)))
+    (ov-set ov 'face 'roam-block-embed-face
+            'line-prefix
+            (propertize
+             "▏" 'face 'roam-block-embed-margin-face)
+            'wrap-prefix
+            (propertize
+             "▏" 'face 'roam-block-embed-margin-face))
+    (push ov roam-block-embed-ovs)))
+
 (defun roam-block-embed-overlay ()
   "Highlight all embed blocks for live buffers."
   (let ((data (roam-block-embed--uuids)))
@@ -199,24 +220,7 @@ except the original block."
                  (unless (string= uuid embed-id)
                    (with-current-buffer buf
                      (when uuid
-                       (let* ((ov (car (ov-in 'uuid uuid)))
-                              (beg (ov-beg ov))
-                              (end (ov-end ov))
-                              (content (buffer-substring beg end)))
-                         (ov-set ov 'face 'roam-block-embed-face
-                                 'line-prefix
-                                 (propertize
-                                  "▏" 'face 'roam-block-embed-margin-face)
-                                 'wrap-prefix
-                                 (propertize
-                                  "▏" 'face 'roam-block-embed-margin-face))
-                         (push ov roam-block-embed-ovs))))))))))))))
-
-(defface roam-block-embed-margin-face
-  '((t :inherit fringe))
-  "Face for embed block left margin.")
-
-;; need to overlay embed blocks when first open a file!
+                       (roam-block-embed-overlay-block uuid)))))))))))))
 
 ;;;###autoload
 (defun roam-block-embed-highlight-toggle ()

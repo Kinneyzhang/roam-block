@@ -74,10 +74,10 @@ at the beginning of file, usually are some meta settings.")
     (unless (= roam-block-linum (line-number-at-pos))
       (ov-move ov (line-beginning-position) (ov-end ov)))))
 
-(defun roam-block-overlay-block (beg end &optional uuid prop value)
+(defun roam-block-overlay-block (beg end &optional uuid properties)
   "Put uuid overlay between BEG and END. If UUID is non-nil, 
 use it as the value of uuid overlay.  
-If PROP and VALUE is non-nil, also add the overlay on this block."
+If PROPERTIES is non-nil, also add the properties on this block."
   (let ((uuid (or uuid (roam-block--get-uuid)))
         (inhibit-read-only t)
         (ov (ov-make beg end nil nil t)))
@@ -86,7 +86,8 @@ If PROP and VALUE is non-nil, also add the overlay on this block."
     (ov-set ov 'evaporate t)
     (ov-set ov 'insert-in-front-hooks
             '(roam-block-insert-in-front))
-    (when (and prop value) (ov-set ov prop value))
+    (while properties
+      (ov-set ov (pop properties) (pop properties)))
     uuid))
 
 (defun roam-block-restore-overlays ()

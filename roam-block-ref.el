@@ -49,7 +49,7 @@
   "Non-nil means to highlight the refered block display and
 distinguish it with the original block.")
 
-(defvar roam-block-ref-face '(:underline (:color "#666"))
+(defvar roam-block-ref-face '(:underline (:color "#222"))
   "Faces to highlight roam block ref.")
 
 (defvar roam-block-ref-stored nil
@@ -333,6 +333,30 @@ If a region is active, copy all blocks' ref links that the region contains."
        (setq roam-block-contents (mapcar #'car data))))
     roam-block-contents))
 
+(defun roam-block-ref-completion-exit-function (string status)
+  "Function to run after completion is performed.
+STRING is the text to which the field was completed, 
+and STATUS indicates what kind of operation happened:
+
+‘finished’ - text is now complete
+‘sole’     - text cannot be further completed but
+             completion is not finished
+‘exact’    - text is a valid completion but may be further
+             completed."
+  (promise-chain (roam-block-db--content-uuid string)
+    (then
+     (lambda (uuid)
+       (when (eq status 'finished)
+         ;; (message "uuid:%s" uuid)
+         ;; FIXME: 'roam-block-db--content-uuid' cannot  get the
+         ;; value uuid stablely. It may be a bug of emacsql!
+         (save-excursion
+           (when (search-backward string (line-beginning-position) t)
+             (replace-match uuid t))))))
+    (promise-catch (lambda (reason)
+                     (message reason)))))
+
+;;;###autoload
 (defun roam-block-ref-completion-at-point ()
   "Function to complete block ref at point."
   (interactive)
@@ -352,29 +376,6 @@ If a region is active, copy all blocks' ref links that the region contains."
         `(,beg ,end ,(roam-block-blocks-contents)
                :exit-function
                ,#'roam-block-ref-completion-exit-function)))))
-
-(defun roam-block-ref-completion-exit-function (string status)
-  "Function to run after completion is performed.
-STRING is the text to which the field was completed, 
-and STATUS indicates what kind of operation happened:
-
-‘finished’ - text is now complete
-‘sole’     - text cannot be further completed but
-             completion is not finished
-‘exact’    - text is a valid completion but may be further
-             completed."
-  (when (eq status 'finished)
-    (promise-chain (roam-block-db--content-uuid string)
-      (then
-       (lambda (uuid)
-         ;; (message "uuid:%s" uuid)
-         ;; FIXME: 'roam-block-db--content-uuid' cannot  get the
-         ;; value uuid stablely. It may be a bug of emacsql!
-         (save-excursion
-           (when (search-backward string (line-beginning-position) t)
-             (replace-match uuid t)))))
-      (promise-catch (lambda (reason)
-                       (message reason))))))
 
 ;; Edit block
 
