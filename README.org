@@ -18,7 +18,7 @@
 
    *block-ref*
 
-   [[./demos/roam-block-embed.gif]]
+   [[./demos/roam-block-ref.gif]]
 
    *block-embed*
    
