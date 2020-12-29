@@ -49,8 +49,8 @@
   "Non-nil means to highlight the refered block display and
 distinguish it with the original block.")
 
-(defvar roam-block-ref-face '(:underline (:color "#222"))
-  "Faces to highlight roam block ref.")
+(defvar roam-block-ref-prefix-symbol ""
+  "Prefix symbol of block ref.")
 
 (defvar roam-block-ref-stored nil
   "Roam block ref that have stored.")
@@ -67,6 +67,20 @@ distinguish it with the original block.")
   'follow-link nil
   'mouse-face nil
   'help-echo "Jump to this block.")
+
+(defun roam-block-ref-underline-face ()
+  "Return different block-ref underline face
+ according to the background of theme."
+  (pcase (frame-parameter nil 'background-mode)
+    ('light '(:underline (:color "#ddd")))
+    ('dark '(:underline (:color "#666")))))
+
+(defun roam-block-ref-symbol-face ()
+  "Return different block-ref's `roam-block-ref-prefix-symbol' face
+ according to the background of theme."
+  (pcase (frame-parameter nil 'background-mode)
+    ('light '(:height 0.9 :foreground "#888"))
+    ('dark '(:height 0.9 :foreground "#bbb"))))
 
 (defun roam-block-follow-ref (button)
   "Jump to block references buffer after follow roam-block ref link."
@@ -150,9 +164,9 @@ except the region with org-link face."
             (add-text-properties
              (prop-match-beginning match)
              (prop-match-end match)
-             `(face ,roam-block-ref-face)))
+             `(face ,(roam-block-ref-underline-face))))
           (buffer-string)))
-    (propertize content 'face roam-block-ref-face)))
+    (propertize content 'face (roam-block-ref-underline-face))))
 
 (defun roam-block-ref-fontify (beg end)
   "Highlight roam-block ref between BEG and END."
@@ -171,8 +185,10 @@ except the region with org-link face."
                (propertized-content
                 (when content
                   (if roam-block-ref-highlight
-                      (concat (propertize " " 'face '(:height 0.9)
-                                          'display '(raise 0.1))
+                      (concat (propertize
+                               (concat roam-block-ref-prefix-symbol " ")
+                               'face (roam-block-ref-symbol-face)
+                               'display '(raise 0.1))
                               (roam-block-ref--highlight-display content))
                     content))))
           (if content
