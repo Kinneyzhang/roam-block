@@ -77,7 +77,7 @@
       (emacsql db `[:create-table ,table ,schema]))))
 
 (defun roam-block-db ()
-  "Entrypoint to the Org-roam sqlite database.
+  "Entrypoint to the roam-block sqlite database.
 Initializes and stores the database, and the database connection."
   (let* ((path (buffer-file-name))
          (home (roam-block-check-home))
