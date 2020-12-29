@@ -245,7 +245,7 @@ except the region with org-link face."
   "Highlight roam-block ref in all current frame's windows.
 If UUID is non-nil, highlight all refs with this uuid."
   ;; fontify current buffer
-  (roam-block-ref-fontify (point-min) (point-max))
+  ;; (roam-block-ref-fontify (point-min) (point-max))
   ;; fontify all displayed windows
   (dolist (win (window-list))
     (when-let* ((buf (window-buffer win))
