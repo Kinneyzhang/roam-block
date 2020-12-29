@@ -3,6 +3,9 @@
   - [[#demos][Demos]]
   - [[#installation][Installation]]
   - [[#usage][Usage]]
+  - [[#faq][FAQ]]
+  - [[#plan-list][Plan List]]
+  - [[#contribution][Contribution]]
   - [[#license][License]]
 
 ** Introduction
@@ -10,12 +13,14 @@
    
    What's the differences between block-ref and block-embed? Block-ref means a reference refers to a block, while block-embed embed one block in any place. When you change the content of the original block, both of the block-ref and block-embed content could be synchronized. But, there're some differences.
 
-   For block-ref, you cannot change the content of it because it's actually a reference literally. This feature suits the situation where you don't want to change the block content any where but refer to the original one.
+   For block-ref, you cannot change the content of it because it's actually a reference literally. This feature suits the situation where you don't want to change the block content any where but refer to the original one. In roam-block, block refs will be synchronized after buffer saved.
 
-   For block-embed, you can change the content of any embed blocks and all the blocks which are derived from one original block will be synchronized.
+   For block-embed, you can change the content of any embed blocks and all the blocks which are derived from one original block will be synchronized. In roam-block, embed blocks will be synchronized at real time.
 
 ** Demos
 
+   Look at the gifs for a quick view:
+   
    *block-ref*
 
    [[./demos/roam-block-ref.gif]]
@@ -23,7 +28,11 @@
    *block-embed*
    
    [[./demos/roam-block-embed.gif]]
-   
+
+   Look at the video for details:
+
+   https://youtu.be/O11pDHJImpE
+
 ** Installation
 
    Firstly, install the dependencies:
@@ -39,13 +48,14 @@
    (add-to-list 'load-path "path/to/roam-block/")
    (require 'roam-block)
    (setq roam-block-home '("~/roam-block/")
-         roam-block-ref-highlight nil)
+         roam-block-ref-highlight t
+         roam-block-embed-highlight t)
    (roam-block-mode 1)
-   (define-key roam-block-mode-map (kbd "C-c b r c") #'roam-block-ref-store)
+   (define-key roam-block-mode-map (kbd "C-c b r s") #'roam-block-ref-store)
    (define-key roam-block-mode-map (kbd "C-c b r i") #'roam-block-ref-insert)
    (define-key roam-block-mode-map (kbd "C-c b r d") #'roam-block-ref-delete)
    (define-key roam-block-mode-map (kbd "C-c b r t") #'roam-block-ref-highlight-toggle)
-   (define-key roam-block-mode-map (kbd "C-c b e c") #'roam-block-embed-store)
+   (define-key roam-block-mode-map (kbd "C-c b e s") #'roam-block-embed-store)
    (define-key roam-block-mode-map (kbd "C-c b e i") #'roam-block-embed-insert)
    (define-key roam-block-mode-map (kbd "C-c b e t") #'roam-block-embed-highlight-toggle)
    (define-key roam-block-mode-map (kbd "C-c b d") #'roam-block-delete-block)
@@ -73,7 +83,11 @@
    #+END_SRC
 
 ** Usage
- 
+   
+   Roam-block can only work on the directories defined in =roam-block-home=. The value of the variable is a list, each item must be a valid directory path. You may want to add you org-roam directory to the variable.
+
+   Main commands:
+
    =roam-block-ref-store=\\
    Store the ref of current block or blocks in an active region.
 
@@ -98,5 +112,29 @@
    =roam-block-delete-block=\\
    Delete block at point.
 
+** FAQ
+   *Get an error message "(roam-block) No valid block here!" when try to store block-ref or block-embed. What to do?*
+   
+   Roam-block sets a uuid overly for each block after saving buffer. The error message means that there's no uuid overlay in current block. You should first save buffer, then use the 'store command' of block-ref or block-embed. Considering of this, it's better to set 'auto-save' for your emacs. similarly, the content of all block-refs will be synchronized after saving buffer.
+
+** Plan List
+   - [ ] Quick insert a block-ref or block-embed by querying database instead of using the 'store command'.
+   - [ ] Synchronize the content of block-ref at real time, like what block-embed have implemented.
+   - [ ] Support roam-block in markdown.
+
+** Contribution
+
+   Use the github new feature [[https://github.com/Kinneyzhang/roam-block/discussions][Discussions]] if you got any questions about roam-block. Open a [[https://github.com/Kinneyzhang/roam-block/issues][issue]] if you have confirmed that your question is an issue of roam-block.
+
+   The code of roam-block was organized by module, it's easy to read and understand. Welcome to contribute PRs.
+
 ** License
    Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].
+
+
+
+
+
+
+
+
