@@ -6,7 +6,7 @@
 ;; Keywords: block roam convenience
 ;; Author: Kinney Zhang <kinneyzhang666@gmail.com>
 ;; URL: https://github.com/Kinneyzhang/roam-block
-;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (ov "1.0.6"))
+;; Package-Requires: ((emacs "26.1") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (ov "1.0.6") (promise "1.1"))
 
 ;; This file is not part of GNU Emacs.
 

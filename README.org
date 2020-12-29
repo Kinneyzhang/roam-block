@@ -39,6 +39,7 @@
 
    - [[https://www.sqlite.org/index.html][sqlite3]] cli
    - [[https://github.com/emacsorphanage/ov][ov]] package
+   - [[https://github.com/chuntaro/emacs-promise][promise]] package
    - [[https://github.com/skeeto/emacsql][emacsql]] package
    - [[https://github.com/cireu/emacsql-sqlite3][emacsql-sqlite3]] package
 
@@ -130,11 +131,3 @@
 
 ** License
    Copyright © Kinney Zhang and contributors. Distributed under the [[./LICENSE][GPL v3.0]].
-
-
-
-
-
-
-
-
